@@ -1,15 +1,21 @@
 import { ANNOUNCEMENTS, type Announcement } from '@/mocks/announcements';
 import { delay } from '@/mocks/delay';
 
+export interface AnnouncementWithReadState extends Announcement {
+  isReadByMe: boolean;
+}
+
 let announcementDb: Announcement[] = [...ANNOUNCEMENTS];
 const readByCurrentSession = new Set<string>();
 
-export async function listAnnouncements(): Promise<Announcement[]> {
+export async function listAnnouncements(): Promise<AnnouncementWithReadState[]> {
   await delay();
-  return [...announcementDb].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-    return a.publishedAt < b.publishedAt ? 1 : -1;
-  });
+  return [...announcementDb]
+    .sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      return a.publishedAt < b.publishedAt ? 1 : -1;
+    })
+    .map((a) => ({ ...a, isReadByMe: readByCurrentSession.has(a.id) }));
 }
 
 export interface CreateAnnouncementInput {

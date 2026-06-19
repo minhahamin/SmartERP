@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Megaphone, Menu, Search, LogOut, User as UserIcon, RefreshCw, Check } from 'lucide-react';
+import { Menu, Search, LogOut, User as UserIcon, RefreshCw, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -14,6 +14,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { NotificationsPopover } from '@/components/layout/notifications-popover';
+import { AnnouncementsPopover } from '@/components/layout/announcements-popover';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 import { ROLE_LABEL, type RoleName } from '@/types/auth';
@@ -21,23 +23,6 @@ import { ROUTES } from '@/config/routes';
 import { cn } from '@/lib/utils';
 
 const ROLE_OPTIONS = Object.keys(ROLE_LABEL) as RoleName[];
-
-function NotificationButton({ icon: Icon, count, label }: { icon: typeof Bell; count: number; label: string }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      className="relative flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-    >
-      <Icon className="size-[18px]" />
-      {count > 0 && (
-        <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
 
 function Header() {
   const [search, setSearch] = useState('');
@@ -76,8 +61,8 @@ function Header() {
       <div className="flex-1 sm:hidden" />
 
       <div className="flex items-center gap-1">
-        <NotificationButton icon={Bell} count={3} label="알림" />
-        <NotificationButton icon={Megaphone} count={2} label="공지사항" />
+        <NotificationsPopover />
+        <AnnouncementsPopover />
       </div>
 
       <div className="h-5 w-px bg-border" />
