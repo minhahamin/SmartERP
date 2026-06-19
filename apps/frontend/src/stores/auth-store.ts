@@ -1,43 +1,39 @@
 import { create } from 'zustand';
 import type { AuthUser, RoleName } from '@/types/auth';
+import { EMPLOYEES } from '@/mocks/employees';
+import { DEPARTMENTS } from '@/mocks/departments';
 
 /**
  * 백엔드가 준비되기 전까지 사용하는 데모 계정.
- * docs/02-users-and-permissions.md 2.1 페르소나 정의와 1:1로 매핑된다.
+ * docs/02-users-and-permissions.md 2.1 페르소나 정의와 1:1로 매핑되며,
+ * mocks/employees.ts의 실제 직원 레코드를 그대로 참조한다 — id가 어긋나면
+ * 내 급여/내 통계/AI 챗봇의 본인 스코프 조회가 깨지므로 단일 소스를 유지한다.
  */
+const DEMO_EMPLOYEE_ID: Record<RoleName, string> = {
+  ADMIN: 'emp-1000', // 김도윤
+  HR_MANAGER: 'emp-1042', // 최유진
+  SALES_MANAGER: 'emp-1024', // 김민준
+  EMPLOYEE: 'emp-1031', // 박지훈
+};
+
+function toAuthUser(role: RoleName): AuthUser {
+  const employee = EMPLOYEES.find((e) => e.id === DEMO_EMPLOYEE_ID[role]);
+  if (!employee) throw new Error(`데모 계정 매핑 오류: ${role}에 해당하는 직원을 찾을 수 없습니다.`);
+  return {
+    id: employee.id,
+    name: employee.name,
+    email: employee.email,
+    role,
+    departmentName: DEPARTMENTS.find((d) => d.id === employee.departmentId)?.name ?? '-',
+    position: employee.position,
+  };
+}
+
 export const MOCK_USERS: Record<RoleName, AuthUser> = {
-  ADMIN: {
-    id: 'u-admin',
-    name: '김도윤',
-    email: 'admin@erpilot.io',
-    role: 'ADMIN',
-    departmentName: '경영지원팀',
-    position: '대표',
-  },
-  HR_MANAGER: {
-    id: 'u-hr',
-    name: '최유진',
-    email: 'hr@erpilot.io',
-    role: 'HR_MANAGER',
-    departmentName: '인사팀',
-    position: '과장',
-  },
-  SALES_MANAGER: {
-    id: 'u-sales',
-    name: '김민준',
-    email: 'sales@erpilot.io',
-    role: 'SALES_MANAGER',
-    departmentName: '영업1팀',
-    position: '팀장',
-  },
-  EMPLOYEE: {
-    id: 'u-emp',
-    name: '박지훈',
-    email: 'employee@erpilot.io',
-    role: 'EMPLOYEE',
-    departmentName: '생산1팀',
-    position: '사원',
-  },
+  ADMIN: toAuthUser('ADMIN'),
+  HR_MANAGER: toAuthUser('HR_MANAGER'),
+  SALES_MANAGER: toAuthUser('SALES_MANAGER'),
+  EMPLOYEE: toAuthUser('EMPLOYEE'),
 };
 
 interface AuthState {

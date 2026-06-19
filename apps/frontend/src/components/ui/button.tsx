@@ -46,9 +46,18 @@ function Button({
   children,
   ...props
 }: ButtonProps) {
-  const Comp = asChild ? Slot : 'button';
+  // Slot(Radix)은 자식으로 단일 React 엘리먼트만 허용하므로, asChild일 때는
+  // 로딩 아이콘을 형제로 주입하지 않고 children 하나만 그대로 전달한다.
+  if (asChild) {
+    return (
+      <Slot data-slot="button" className={cn(buttonVariants({ variant, size }), className)} {...props}>
+        {children}
+      </Slot>
+    );
+  }
+
   return (
-    <Comp
+    <button
       data-slot="button"
       className={cn(buttonVariants({ variant, size }), className)}
       disabled={disabled || loading}
@@ -57,7 +66,7 @@ function Button({
     >
       {loading ? <Loader2 className="animate-spin" /> : null}
       {children}
-    </Comp>
+    </button>
   );
 }
 
