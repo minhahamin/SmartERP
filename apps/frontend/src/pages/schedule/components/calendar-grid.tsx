@@ -1,6 +1,8 @@
 import { eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, isSameDay, startOfMonth, startOfWeek } from 'date-fns';
+import { Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useAuthStore } from '@/stores/auth-store';
 import { SCHEDULE_TYPE_LABEL, type ScheduleEvent } from '@/mocks/schedules';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -18,9 +20,15 @@ interface CalendarGridProps {
   year: number;
   month: number; // 1-12
   events: ScheduleEvent[];
+  onEdit: (event: ScheduleEvent) => void;
+  onDelete: (event: ScheduleEvent) => void;
 }
 
-function CalendarGrid({ year, month, events }: CalendarGridProps) {
+function CalendarGrid({ year, month, events, onEdit, onDelete }: CalendarGridProps) {
+  const user = useAuthStore((state) => state.user);
+  /** docs/02 권한 매트릭스: ADMIN/HR_MANAGER는 전체 일정 CRUD, 그 외 역할은 본인이 등록한 일정만 수정/삭제 가능 */
+  const canManage = (event: ScheduleEvent) => user?.role === 'ADMIN' || user?.role === 'HR_MANAGER' || event.ownerId === user?.id;
+
   const monthStart = startOfMonth(new Date(year, month - 1, 1));
   const monthEnd = endOfMonth(monthStart);
   const gridStart = startOfWeek(monthStart);
@@ -73,7 +81,7 @@ function CalendarGrid({ year, month, events }: CalendarGridProps) {
                     </button>
                   </PopoverTrigger>
                   <PopoverContent>
-                    <EventDetail event={event} />
+                    <EventDetail event={event} canManage={canManage(event)} onEdit={onEdit} onDelete={onDelete} />
                   </PopoverContent>
                 </Popover>
               ))}
@@ -88,7 +96,7 @@ function CalendarGrid({ year, month, events }: CalendarGridProps) {
                     <p className="mb-2 text-xs font-semibold text-foreground">{format(date, 'M월 d일')} 일정 ({dayEvents.length})</p>
                     <div className="flex flex-col gap-2">
                       {dayEvents.map((event) => (
-                        <EventDetail key={event.id} event={event} compact />
+                        <EventDetail key={event.id} event={event} compact canManage={canManage(event)} onEdit={onEdit} onDelete={onDelete} />
                       ))}
                     </div>
                   </PopoverContent>
@@ -102,14 +110,50 @@ function CalendarGrid({ year, month, events }: CalendarGridProps) {
   );
 }
 
-function EventDetail({ event, compact = false }: { event: ScheduleEvent; compact?: boolean }) {
+interface EventDetailProps {
+  event: ScheduleEvent;
+  compact?: boolean;
+  canManage: boolean;
+  onEdit: (event: ScheduleEvent) => void;
+  onDelete: (event: ScheduleEvent) => void;
+}
+
+function EventDetail({ event, compact = false, canManage, onEdit, onDelete }: EventDetailProps) {
   return (
-    <div className={cn('flex flex-col gap-0.5', !compact && 'text-sm')}>
-      <p className="font-medium text-foreground">{event.title}</p>
-      <p className="text-xs text-muted-foreground">
-        {SCHEDULE_TYPE_LABEL[event.type]} · {event.startTime}–{event.endTime}
-      </p>
-      {event.location !== '-' && <p className="text-xs text-muted-foreground">{event.location}</p>}
+    <div className={cn('flex flex-col gap-1', !compact && 'text-sm')}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5">
+          <p className="font-medium text-foreground">{event.title}</p>
+          <p className="text-xs text-muted-foreground">
+            {SCHEDULE_TYPE_LABEL[event.type]} · {event.startTime}–{event.endTime}
+          </p>
+          {event.location !== '-' && <p className="text-xs text-muted-foreground">{event.location}</p>}
+        </div>
+        {canManage && (
+          <div className="flex shrink-0 items-center gap-0.5">
+            <PopoverClose asChild>
+              <button
+                type="button"
+                aria-label="일정 수정"
+                onClick={() => onEdit(event)}
+                className="flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <Pencil className="size-3.5" />
+              </button>
+            </PopoverClose>
+            <PopoverClose asChild>
+              <button
+                type="button"
+                aria-label="일정 삭제"
+                onClick={() => onDelete(event)}
+                className="flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-secondary hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </PopoverClose>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

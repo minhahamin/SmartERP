@@ -12,6 +12,7 @@ import { PayrollDetailSheet } from '@/pages/payroll/components/payroll-detail-sh
 import { PayrollStatusBadge } from '@/pages/payroll/components/payroll-status-badge';
 import {
   useBulkConfirmPayroll,
+  useBulkPayPayroll,
   useGenerateMonthlyPayroll,
   useMyPayroll,
   usePayrollList,
@@ -39,8 +40,11 @@ function PayrollManagementView() {
   const { data: records, isLoading } = usePayrollList(year, month);
   const generate = useGenerateMonthlyPayroll();
   const bulkConfirm = useBulkConfirmPayroll();
-  const [selected, setSelected] = useState<PayrollRecord | null>(null);
+  const bulkPay = useBulkPayPayroll();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = records?.find((r) => r.id === selectedId) ?? null;
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkPayOpen, setBulkPayOpen] = useState(false);
 
   const summary = useMemo(() => {
     const draft = records?.filter((r) => r.status === 'DRAFT').length ?? 0;
@@ -82,6 +86,11 @@ function PayrollManagementView() {
               일괄 확정
             </Button>
           )}
+          {records && records.length > 0 && summary.confirmed > 0 && (
+            <Button variant="secondary" onClick={() => setBulkPayOpen(true)}>
+              일괄 지급
+            </Button>
+          )}
           {(!records || records.length === 0) && !isLoading && (
             <Button onClick={() => generate.mutate({ year, month })} loading={generate.isPending}>
               급여 일괄 생성
@@ -104,11 +113,11 @@ function PayrollManagementView() {
             description="'급여 일괄 생성' 버튼을 눌러 직원별 기본급 기준 급여를 생성하세요."
           />
         ) : (
-          <PayrollTable records={records} onRowClick={setSelected} />
+          <PayrollTable records={records} onRowClick={(record) => setSelectedId(record.id)} />
         )}
       </Card>
 
-      <PayrollDetailSheet record={selected} onOpenChange={(open) => !open && setSelected(null)} />
+      <PayrollDetailSheet record={selected} onOpenChange={(open) => !open && setSelectedId(null)} />
 
       <ConfirmDialog
         open={bulkConfirmOpen}
@@ -118,6 +127,16 @@ function PayrollManagementView() {
         confirmLabel="일괄 확정"
         loading={bulkConfirm.isPending}
         onConfirm={() => bulkConfirm.mutate({ year, month }, { onSuccess: () => setBulkConfirmOpen(false) })}
+      />
+
+      <ConfirmDialog
+        open={bulkPayOpen}
+        onOpenChange={setBulkPayOpen}
+        title={`${year}년 ${month}월 급여를 일괄 지급할까요?`}
+        description="CONFIRMED 상태인 급여 항목이 모두 PAID로 전환됩니다."
+        confirmLabel="일괄 지급"
+        loading={bulkPay.isPending}
+        onConfirm={() => bulkPay.mutate({ year, month }, { onSuccess: () => setBulkPayOpen(false) })}
       />
     </div>
   );

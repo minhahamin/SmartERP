@@ -55,3 +55,10 @@ export async function bulkConfirmPayroll(year: number, month: number): Promise<v
     p.payYear === year && p.payMonth === month && p.status === 'DRAFT' ? { ...p, status: 'CONFIRMED' as const } : p,
   );
 }
+
+export async function bulkPayPayroll(year: number, month: number): Promise<void> {
+  await delay(500);
+  payrollDb = payrollDb.map((p) =>
+    p.payYear === year && p.payMonth === month && p.status === 'CONFIRMED' ? { ...p, status: 'PAID' as const } : p,
+  );
+}

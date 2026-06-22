@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   bulkConfirmPayroll,
+  bulkPayPayroll,
   generateMonthlyPayroll,
   getMyPayroll,
   listPayroll,
@@ -69,6 +70,17 @@ export function useBulkConfirmPayroll() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PAYROLL_KEY });
       toast({ title: '전체 급여가 확정되었습니다.', variant: 'success' });
+    },
+  });
+}
+
+export function useBulkPayPayroll() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ year, month }: { year: number; month: number }) => bulkPayPayroll(year, month),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PAYROLL_KEY });
+      toast({ title: '전체 급여가 지급 처리되었습니다.', variant: 'success' });
     },
   });
 }

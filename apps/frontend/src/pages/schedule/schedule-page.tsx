@@ -4,9 +4,11 @@ import { PageHeader } from '@/components/common/page-header';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { CalendarGrid } from '@/pages/schedule/components/calendar-grid';
 import { ScheduleFormDialog } from '@/pages/schedule/components/schedule-form-dialog';
-import { useSchedulesByMonth } from '@/pages/schedule/hooks/use-schedule';
+import { useDeleteSchedule, useSchedulesByMonth } from '@/pages/schedule/hooks/use-schedule';
+import type { ScheduleEvent } from '@/mocks/schedules';
 
 const LEGEND: { label: string; className: string }[] = [
   { label: '회의', className: 'bg-info' },
@@ -19,12 +21,20 @@ function SchedulePage() {
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(6);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<ScheduleEvent | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<ScheduleEvent | null>(null);
   const { data: events, isLoading } = useSchedulesByMonth(year, month);
+  const deleteSchedule = useDeleteSchedule();
 
   const goToMonth = (delta: number) => {
     const next = new Date(year, month - 1 + delta, 1);
     setYear(next.getFullYear());
     setMonth(next.getMonth() + 1);
+  };
+
+  const openCreateForm = () => {
+    setEditingEvent(undefined);
+    setFormOpen(true);
   };
 
   return (
@@ -53,13 +63,26 @@ function SchedulePage() {
             오늘
           </Button>
         </div>
-        <Button onClick={() => setFormOpen(true)}>
+        <Button onClick={openCreateForm}>
           <Plus /> 일정 추가
         </Button>
       </div>
 
       <Card className="p-4">
-        {isLoading || !events ? <Skeleton className="h-[520px]" /> : <CalendarGrid year={year} month={month} events={events} />}
+        {isLoading || !events ? (
+          <Skeleton className="h-[520px]" />
+        ) : (
+          <CalendarGrid
+            year={year}
+            month={month}
+            events={events}
+            onEdit={(event) => {
+              setEditingEvent(event);
+              setFormOpen(true);
+            }}
+            onDelete={setDeleteTarget}
+          />
+        )}
         <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
           {LEGEND.map((item) => (
             <span key={item.label} className="flex items-center gap-1.5">
@@ -70,7 +93,25 @@ function SchedulePage() {
         </div>
       </Card>
 
-      <ScheduleFormDialog open={formOpen} onOpenChange={setFormOpen} defaultDate={`${year}-${String(month).padStart(2, '0')}-01`} />
+      <ScheduleFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        defaultDate={`${year}-${String(month).padStart(2, '0')}-01`}
+        event={editingEvent}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={`'${deleteTarget?.title}' 일정을 삭제할까요?`}
+        confirmLabel="삭제"
+        variant="danger"
+        loading={deleteSchedule.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteSchedule.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+        }}
+      />
     </div>
   );
 }

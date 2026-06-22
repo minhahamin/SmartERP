@@ -20,7 +20,7 @@ function sum(values: Record<string, number>) {
 function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollDetailSheetProps) {
   const [allowances, setAllowances] = useState<Record<string, number>>({});
   const [deductions, setDeductions] = useState<Record<string, number>>({});
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [transitionTarget, setTransitionTarget] = useState<'CONFIRMED' | 'PAID' | null>(null);
   const updateItem = useUpdatePayrollItem();
   const transition = useTransitionPayrollStatus();
 
@@ -89,8 +89,11 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
               <Button variant="secondary" disabled={!isDirty || updateItem.isPending} onClick={handleSave}>
                 저장
               </Button>
-              <Button disabled={record.status !== 'DRAFT'} onClick={() => setConfirmOpen(true)}>
+              <Button variant="secondary" disabled={record.status !== 'DRAFT'} onClick={() => setTransitionTarget('CONFIRMED')}>
                 확정하기
+              </Button>
+              <Button disabled={record.status !== 'CONFIRMED'} onClick={() => setTransitionTarget('PAID')}>
+                지급하기
               </Button>
             </SheetFooter>
           )}
@@ -98,15 +101,20 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
       </Sheet>
 
       <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title="급여를 확정할까요?"
-        description="확정 후에는 수당/공제 항목을 수정할 수 없습니다."
-        confirmLabel="확정"
-        loading={transition.isPending}
-        onConfirm={() =>
-          transition.mutate({ id: record.id, status: 'CONFIRMED' }, { onSuccess: () => setConfirmOpen(false) })
+        open={transitionTarget !== null}
+        onOpenChange={(open) => !open && setTransitionTarget(null)}
+        title={transitionTarget === 'PAID' ? '급여를 지급 처리할까요?' : '급여를 확정할까요?'}
+        description={
+          transitionTarget === 'PAID'
+            ? '지급 처리 후에는 상태를 되돌릴 수 없습니다.'
+            : '확정 후에는 수당/공제 항목을 수정할 수 없습니다.'
         }
+        confirmLabel={transitionTarget === 'PAID' ? '지급' : '확정'}
+        loading={transition.isPending}
+        onConfirm={() => {
+          if (!transitionTarget) return;
+          transition.mutate({ id: record.id, status: transitionTarget }, { onSuccess: () => setTransitionTarget(null) });
+        }}
       />
     </>
   );
