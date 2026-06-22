@@ -9,7 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { ProductFormDialog } from '@/pages/products/components/product-form-dialog';
 import { useProduct, useToggleProductActive } from '@/pages/products/hooks/use-products';
-import { INVENTORY, WAREHOUSES } from '@/mocks/products';
+import { getInventorySnapshot } from '@/mocks/inventory-store';
+import { getWarehouseById } from '@/mocks/warehouse-store';
 import { STOCK_MOVEMENTS } from '@/mocks/stock-movements';
 import { PRODUCTION_ORDERS } from '@/mocks/production-orders';
 import { ROUTES } from '@/config/routes';
@@ -34,7 +35,7 @@ function ProductDetailPage() {
     );
   }
 
-  const inventory = INVENTORY.filter((i) => i.productId === product.id);
+  const inventory = getInventorySnapshot().filter((i) => i.productId === product.id);
   const movements = STOCK_MOVEMENTS.filter((m) => m.productId === product.id).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   const productionOrders = PRODUCTION_ORDERS.filter((p) => p.productId === product.id);
 
@@ -50,8 +51,12 @@ function ProductDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
         <Card className="flex flex-col items-center gap-3 p-6 text-center">
-          <div className="flex h-28 w-full items-center justify-center rounded-md bg-gray-50 text-muted-foreground">
-            <Package className="size-10" />
+          <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-md bg-gray-50 text-muted-foreground">
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt={product.name} className="size-full object-cover" />
+            ) : (
+              <Package className="size-10" />
+            )}
           </div>
           <div>
             <p className="text-base font-semibold text-foreground">{product.name}</p>
@@ -95,7 +100,7 @@ function ProductDetailPage() {
                 </thead>
                 <tbody>
                   {inventory.map((inv) => {
-                    const warehouse = WAREHOUSES.find((w) => w.id === inv.warehouseId);
+                    const warehouse = getWarehouseById(inv.warehouseId);
                     const low = inv.quantity < product.safetyStock;
                     return (
                       <tr key={inv.warehouseId} className="border-b border-border last:border-0">

@@ -1,6 +1,6 @@
 import { PRODUCTION_ORDERS, type ProductionOrder, type ProductionStatus } from '@/mocks/production-orders';
 import { adjustQuantity } from '@/mocks/inventory-store';
-import { WAREHOUSES } from '@/mocks/products';
+import { getWarehouses } from '@/mocks/warehouse-store';
 import { delay } from '@/mocks/delay';
 
 let productionDb: ProductionOrder[] = [...PRODUCTION_ORDERS];
@@ -43,7 +43,8 @@ export async function updateProductionStatus(id: string, status: ProductionStatu
   if (!updated) throw new Error('생산 오더를 찾을 수 없습니다.');
 
   if (status === 'COMPLETED') {
-    adjustQuantity(updated.productId, WAREHOUSES[0].id, updated.plannedQty);
+    const defaultWarehouseId = getWarehouses()[0]?.id;
+    if (defaultWarehouseId) adjustQuantity(updated.productId, defaultWarehouseId, updated.plannedQty);
   }
   return updated;
 }

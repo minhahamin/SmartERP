@@ -39,6 +39,16 @@ export async function createAnnouncement(input: CreateAnnouncementInput): Promis
   return announcement;
 }
 
+export type UpdateAnnouncementInput = Pick<CreateAnnouncementInput, 'title' | 'content' | 'scope' | 'isPinned'>;
+
+export async function updateAnnouncement(id: string, input: UpdateAnnouncementInput): Promise<Announcement> {
+  await delay(400);
+  announcementDb = announcementDb.map((a) => (a.id === id ? { ...a, ...input } : a));
+  const updated = announcementDb.find((a) => a.id === id);
+  if (!updated) throw new Error('공지사항을 찾을 수 없습니다.');
+  return updated;
+}
+
 export async function markAnnouncementRead(id: string): Promise<Announcement> {
   await delay(150);
   if (!readByCurrentSession.has(id)) {

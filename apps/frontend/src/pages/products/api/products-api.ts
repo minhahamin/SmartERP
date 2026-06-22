@@ -16,6 +16,7 @@ export interface ProductInput {
   salePrice: number;
   costPrice: number;
   safetyStock: number;
+  imageUrl?: string;
 }
 
 export async function listProducts(query: ProductListQuery): Promise<Product[]> {

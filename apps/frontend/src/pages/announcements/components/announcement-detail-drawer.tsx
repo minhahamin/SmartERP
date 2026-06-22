@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
-import { Pin, Users } from 'lucide-react';
+import { Pencil, Pin, Users } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
 import { Tag } from '@/components/ui/tag';
 import { getEmployeeById } from '@/mocks/employees';
 import { useMarkAnnouncementRead } from '@/pages/announcements/hooks/use-announcements';
@@ -9,9 +10,10 @@ import type { Announcement } from '@/mocks/announcements';
 interface AnnouncementDetailDrawerProps {
   announcement: Announcement | null;
   onOpenChange: (open: boolean) => void;
+  onEdit: (announcement: Announcement) => void;
 }
 
-function AnnouncementDetailDrawer({ announcement, onOpenChange }: AnnouncementDetailDrawerProps) {
+function AnnouncementDetailDrawer({ announcement, onOpenChange, onEdit }: AnnouncementDetailDrawerProps) {
   const markRead = useMarkAnnouncementRead();
 
   useEffect(() => {
@@ -24,15 +26,20 @@ function AnnouncementDetailDrawer({ announcement, onOpenChange }: AnnouncementDe
   return (
     <Sheet open={Boolean(announcement)} onOpenChange={onOpenChange}>
       <SheetContent className="w-[480px] max-w-full">
-        <SheetHeader>
-          <div className="flex items-center gap-2">
-            {announcement.isPinned && <Pin className="size-4 fill-primary text-primary" />}
-            <Tag>{announcement.scope}</Tag>
+        <SheetHeader className="flex-row items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              {announcement.isPinned && <Pin className="size-4 fill-primary text-primary" />}
+              <Tag>{announcement.scope}</Tag>
+            </div>
+            <SheetTitle className="mt-1">{announcement.title}</SheetTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {getEmployeeById(announcement.authorId)?.name} · {announcement.publishedAt}
+            </p>
           </div>
-          <SheetTitle>{announcement.title}</SheetTitle>
-          <p className="text-xs text-muted-foreground">
-            {getEmployeeById(announcement.authorId)?.name} · {announcement.publishedAt}
-          </p>
+          <Button variant="secondary" size="sm" onClick={() => onEdit(announcement)}>
+            <Pencil /> 수정
+          </Button>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-5">
           <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{announcement.content}</p>

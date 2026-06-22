@@ -44,6 +44,8 @@ interface AuthState {
   logout: () => void;
   /** 데모용 역할 전환 — RBAC에 따라 메뉴/화면이 바뀌는 것을 재로그인 없이 시연하기 위한 헬퍼 */
   switchRole: (role: RoleName) => void;
+  /** 내 프로필에서 연락처/이메일을 수정했을 때 헤더 등 다른 화면에 즉시 반영하기 위한 패치 */
+  patchUser: (partial: Partial<Pick<AuthUser, 'email'>>) => void;
 }
 
 /**
@@ -66,5 +68,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   switchRole: (role) => {
     if (!get().user) return;
     set({ user: MOCK_USERS[role] });
+  },
+
+  patchUser: (partial) => {
+    const current = get().user;
+    if (!current) return;
+    set({ user: { ...current, ...partial } });
   },
 }));

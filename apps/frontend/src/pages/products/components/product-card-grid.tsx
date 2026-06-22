@@ -25,8 +25,12 @@ function ProductCardGrid({ products }: { products: Product[] }) {
             className="cursor-pointer p-4 transition-shadow hover:shadow-md"
             onClick={() => navigate(`${ROUTES.products}/${product.id}`)}
           >
-            <div className="flex h-24 items-center justify-center rounded-md bg-gray-50 text-muted-foreground">
-              <Package className="size-8" />
+            <div className="flex h-24 items-center justify-center overflow-hidden rounded-md bg-gray-50 text-muted-foreground">
+              {product.imageUrl ? (
+                <img src={product.imageUrl} alt={product.name} className="size-full object-cover" />
+              ) : (
+                <Package className="size-8" />
+              )}
             </div>
             <p className="mt-3 truncate text-sm font-medium text-foreground">{product.name}</p>
             <p className="font-mono text-xs text-muted-foreground">{product.sku}</p>

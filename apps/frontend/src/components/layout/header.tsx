@@ -85,7 +85,7 @@ function Header() {
             <span className="text-xs text-muted-foreground">{user?.email}</span>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => navigate(ROUTES.profile)}>
             <UserIcon /> 내 프로필
           </DropdownMenuItem>
           <DropdownMenuSub>

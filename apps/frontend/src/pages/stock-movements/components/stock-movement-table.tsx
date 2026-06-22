@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
-import { getProductById, getWarehouseById } from '@/mocks/products';
+import { getProductById } from '@/mocks/products';
+import { getWarehouseById } from '@/mocks/warehouse-store';
 import { getEmployeeById } from '@/mocks/employees';
 import type { StockMovement } from '@/mocks/stock-movements';
 

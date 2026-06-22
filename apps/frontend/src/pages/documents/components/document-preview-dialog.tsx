@@ -1,26 +1,31 @@
-import { Sparkles, FileText, Download } from 'lucide-react';
+import { Sparkles, FileText, Download, UploadCloud } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { getVersionHistory } from '@/pages/documents/api/documents-api';
 import type { AppDocument } from '@/mocks/documents';
 
 interface DocumentPreviewDialogProps {
   document: AppDocument | null;
   onOpenChange: (open: boolean) => void;
+  onReupload: (document: AppDocument) => void;
 }
 
-function DocumentPreviewDialog({ document, onOpenChange }: DocumentPreviewDialogProps) {
+function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentPreviewDialogProps) {
   if (!document) return null;
-  const history = getVersionHistory(document.id);
+  const history = document.versionHistory;
 
   return (
     <Dialog open={Boolean(document)} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader className="flex-row items-center justify-between">
           <DialogTitle>{document.title}</DialogTitle>
-          <Button variant="secondary" size="sm">
-            <Download /> 다운로드
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => onReupload(document)}>
+              <UploadCloud /> 새 버전 업로드
+            </Button>
+            <Button variant="secondary" size="sm">
+              <Download /> 다운로드
+            </Button>
+          </div>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-[1.4fr_1fr]">
           <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-md bg-gray-50 text-muted-foreground">
@@ -39,21 +44,18 @@ function DocumentPreviewDialog({ document, onOpenChange }: DocumentPreviewDialog
               </p>
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-semibold text-muted-foreground">버전 이력 ({history.length || 1})</p>
+              <p className="mb-1.5 text-xs font-semibold text-muted-foreground">버전 이력 ({history.length + 1})</p>
               <div className="flex flex-col gap-1 text-sm">
-                {history.length > 0 ? (
-                  history.map((h) => (
-                    <div key={h.version} className="flex items-center justify-between text-muted-foreground">
-                      <span>v{h.version}</span>
-                      <span className="tabular-nums">{h.date}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span>v{document.version}</span>
-                    <span className="tabular-nums">{document.createdAt}</span>
+                <div className="flex items-center justify-between text-foreground">
+                  <span className="font-medium">v{document.version} (현재)</span>
+                  <span className="tabular-nums">{document.createdAt}</span>
+                </div>
+                {history.map((h) => (
+                  <div key={h.version} className="flex items-center justify-between text-muted-foreground">
+                    <span>v{h.version}</span>
+                    <span className="tabular-nums">{h.date}</span>
                   </div>
-                )}
+                ))}
               </div>
             </div>
           </div>

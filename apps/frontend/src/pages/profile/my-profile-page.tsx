@@ -1,26 +1,26 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Pencil } from 'lucide-react';
+import { Mail, Pencil, Phone } from 'lucide-react';
+import { PageHeader } from '@/components/common/page-header';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmployeeStatusBadge } from '@/pages/employees/components/employee-status-badge';
-import { EmployeeFormDialog } from '@/pages/employees/components/employee-form-dialog';
-import { useEmployee } from '@/pages/employees/hooks/use-employees';
+import { MyProfileEditDialog } from '@/pages/profile/components/my-profile-edit-dialog';
 import { AttendanceHistoryTable } from '@/components/common/attendance-history-table';
+import { AttendanceCheckInCard } from '@/components/common/attendance-check-in-card';
 import { PayrollHistoryTable } from '@/components/common/payroll-history-table';
 import { LeaveSummary } from '@/components/common/leave-summary';
+import { useEmployee } from '@/pages/employees/hooks/use-employees';
+import { useAuthStore } from '@/stores/auth-store';
 import { DEPARTMENTS } from '@/mocks/departments';
 import { ROLE_LABEL } from '@/types/auth';
-import { ROUTES } from '@/config/routes';
 
-function EmployeeDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+function MyProfilePage() {
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const [editOpen, setEditOpen] = useState(false);
-  const { data: employee, isLoading } = useEmployee(id);
+  const { data: employee, isLoading } = useEmployee(currentUserId);
 
   if (isLoading || !employee) {
     return (
@@ -35,13 +35,7 @@ function EmployeeDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <button
-        type="button"
-        onClick={() => navigate(ROUTES.employees)}
-        className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> 직원 관리
-      </button>
+      <PageHeader title="내 프로필" description="내 정보, 근태, 급여, 휴가 현황을 확인하고 연차를 신청합니다." />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
         <Card className="flex flex-col items-center gap-3 p-6 text-center">
@@ -64,17 +58,17 @@ function EmployeeDetailPage() {
             </span>
           </div>
           <Button variant="secondary" size="sm" className="mt-2 w-full" onClick={() => setEditOpen(true)}>
-            <Pencil /> 정보 수정
+            <Pencil /> 내 정보 수정
           </Button>
         </Card>
 
         <Card className="p-0">
           <Tabs defaultValue="profile" className="gap-0">
             <TabsList className="px-5 pt-4">
-              <TabsTrigger value="profile">기본정보</TabsTrigger>
-              <TabsTrigger value="attendance">근태</TabsTrigger>
+              <TabsTrigger value="profile">내 정보</TabsTrigger>
+              <TabsTrigger value="attendance">내 근태</TabsTrigger>
               <TabsTrigger value="payroll">급여</TabsTrigger>
-              <TabsTrigger value="leave">휴가</TabsTrigger>
+              <TabsTrigger value="leave">연차 신청</TabsTrigger>
             </TabsList>
 
             <TabsContent value="profile" className="px-5 py-5">
@@ -88,9 +82,13 @@ function EmployeeDetailPage() {
                 <Field label="권한(Role)" value={ROLE_LABEL[employee.role]} />
                 <Field label="입사일" value={employee.hireDate} />
               </dl>
+              <p className="mt-4 text-xs text-muted-foreground">
+                이름·부서·직급·권한 등은 인사 담당자만 변경할 수 있습니다. 연락처/이메일은 우측 상단 "내 정보 수정"에서 직접 변경하세요.
+              </p>
             </TabsContent>
 
             <TabsContent value="attendance" className="px-5 py-5">
+              <AttendanceCheckInCard employeeId={employee.id} />
               <AttendanceHistoryTable employeeId={employee.id} />
             </TabsContent>
 
@@ -99,13 +97,13 @@ function EmployeeDetailPage() {
             </TabsContent>
 
             <TabsContent value="leave" className="px-5 py-5">
-              <LeaveSummary employeeId={employee.id} />
+              <LeaveSummary employeeId={employee.id} allowSubmit />
             </TabsContent>
           </Tabs>
         </Card>
       </div>
 
-      <EmployeeFormDialog open={editOpen} onOpenChange={setEditOpen} employee={employee} />
+      <MyProfileEditDialog open={editOpen} onOpenChange={setEditOpen} employee={employee} />
     </div>
   );
 }
@@ -119,4 +117,4 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-export { EmployeeDetailPage };
+export { MyProfilePage };

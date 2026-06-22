@@ -1,35 +1,35 @@
-import { DOCUMENTS, VERSION_HISTORY, type AppDocument, type DocumentCategory } from '@/mocks/documents';
+import type { AppDocument } from '@/mocks/documents';
+import {
+  addDocument,
+  getDocumentSnapshot,
+  patchDocument,
+  removeAllDocuments,
+  removeDocuments,
+  scheduleIndexing,
+} from '@/mocks/document-store';
 import { delay } from '@/mocks/delay';
 
-let documentDb: AppDocument[] = [...DOCUMENTS];
+const TODAY = '2026-06-19';
 
 export interface DocumentListQuery {
-  category?: DocumentCategory;
+  folderId?: string;
 }
 
 export async function listDocuments(query: DocumentListQuery): Promise<AppDocument[]> {
   await delay();
-  let items = [...documentDb].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  if (query.category) items = items.filter((d) => d.category === query.category);
+  let items = [...getDocumentSnapshot()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  if (query.folderId) items = items.filter((d) => d.folderId === query.folderId);
   return items;
-}
-
-export function getVersionHistory(documentId: string) {
-  return VERSION_HISTORY[documentId] ?? [];
 }
 
 export interface UploadDocumentInput {
   title: string;
-  category: DocumentCategory;
+  folderId: string;
   fileType: string;
   fileSize: number;
   uploadedBy: string;
 }
 
-/**
- * 업로드 직후 PENDING으로 생성하고, RAG 색인 파이프라인(텍스트추출→Chunking→Embedding)을
- * 모사해 PROCESSING → DONE으로 비동기 전환한다(docs/10-rag-design.md).
- */
 export async function uploadDocument(input: UploadDocumentInput): Promise<AppDocument> {
   await delay(300);
   const doc: AppDocument = {
@@ -37,20 +37,45 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<AppDoc
     version: 1,
     isPublic: true,
     summary: '',
-    createdAt: '2026-06-19',
+    createdAt: TODAY,
     indexStatus: 'PENDING',
+    versionHistory: [],
     ...input,
   };
-  documentDb = [doc, ...documentDb];
-
-  setTimeout(() => {
-    documentDb = documentDb.map((d) => (d.id === doc.id ? { ...d, indexStatus: 'PROCESSING' as const } : d));
-  }, 1200);
-  setTimeout(() => {
-    documentDb = documentDb.map((d) =>
-      d.id === doc.id ? { ...d, indexStatus: 'DONE' as const, summary: '업로드된 문서가 자동으로 색인되어 AI 챗봇 검색 대상에 포함되었습니다.' } : d,
-    );
-  }, 3200);
-
+  addDocument(doc);
+  scheduleIndexing(doc.id);
   return doc;
+}
+
+export interface ReuploadDocumentInput {
+  fileType: string;
+  fileSize: number;
+}
+
+/** 기존 문서에 새 버전을 업로드한다 — 직전 버전은 versionHistory에 보존하고 색인을 다시 PENDING부터 진행한다. */
+export async function reuploadDocument(documentId: string, input: ReuploadDocumentInput): Promise<AppDocument> {
+  await delay(350);
+  const current = getDocumentSnapshot().find((d) => d.id === documentId);
+  if (!current) throw new Error('문서를 찾을 수 없습니다.');
+
+  const updated = patchDocument(documentId, {
+    version: current.version + 1,
+    fileType: input.fileType,
+    fileSize: input.fileSize,
+    createdAt: TODAY,
+    indexStatus: 'PENDING',
+    versionHistory: [{ version: current.version, date: current.createdAt }, ...current.versionHistory],
+  });
+  scheduleIndexing(documentId);
+  return updated;
+}
+
+export async function deleteDocuments(ids: string[]): Promise<void> {
+  await delay(350);
+  removeDocuments(ids);
+}
+
+export async function deleteAllDocuments(): Promise<void> {
+  await delay(350);
+  removeAllDocuments();
 }

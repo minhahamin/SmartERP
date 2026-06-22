@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StockMovementTable } from '@/pages/stock-movements/components/stock-movement-table';
 import { StockMovementFormDialog } from '@/pages/stock-movements/components/stock-movement-form-dialog';
 import { useStockMovements } from '@/pages/stock-movements/hooks/use-stock-movements';
-import { PRODUCTS, WAREHOUSES } from '@/mocks/products';
+import { useWarehouses } from '@/pages/inventory/hooks/use-warehouses';
+import { PRODUCTS } from '@/mocks/products';
 import type { StockMovementType } from '@/mocks/stock-movements';
 
 function StockMovementsPage() {
@@ -16,6 +17,7 @@ function StockMovementsPage() {
   const [warehouseId, setWarehouseId] = useState('ALL');
   const [type, setType] = useState('ALL');
   const [formMode, setFormMode] = useState<StockMovementType | null>(null);
+  const { data: warehouses } = useWarehouses();
 
   const { data: movements, isLoading } = useStockMovements({
     productId: productId === 'ALL' ? undefined : productId,
@@ -48,7 +50,7 @@ function StockMovementsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">전체 창고</SelectItem>
-              {WAREHOUSES.map((w) => (
+              {(warehouses ?? []).map((w) => (
                 <SelectItem key={w.id} value={w.id}>
                   {w.name}
                 </SelectItem>

@@ -8,12 +8,8 @@ export interface Product {
   costPrice: number;
   safetyStock: number;
   isActive: boolean;
-}
-
-export interface Warehouse {
-  id: string;
-  name: string;
-  location: string;
+  /** 브라우저 로컬 미리보기용 객체 URL — 새로고침 시 사라진다(실제 백엔드 연동 시 S3 등 업로드 URL로 대체). */
+  imageUrl?: string;
 }
 
 export interface InventoryRecord {
@@ -35,11 +31,6 @@ export const PRODUCTS: Product[] = [
   { id: 'product-10', sku: 'GSK-RBR-001', name: '고무 패킹', category: '부품', unit: 'EA', salePrice: 900, costPrice: 500, safetyStock: 60, isActive: false },
 ];
 
-export const WAREHOUSES: Warehouse[] = [
-  { id: 'wh-1', name: '1창고', location: '경기도 안산시' },
-  { id: 'wh-2', name: '2창고', location: '충청남도 아산시' },
-];
-
 export const INVENTORY: InventoryRecord[] = [
   { productId: 'product-1', warehouseId: 'wh-1', quantity: 42 },
   { productId: 'product-1', warehouseId: 'wh-2', quantity: 120 },
@@ -59,8 +50,4 @@ export const INVENTORY: InventoryRecord[] = [
 
 export function getProductById(id: string): Product | undefined {
   return PRODUCTS.find((p) => p.id === id);
-}
-
-export function getWarehouseById(id: string): Warehouse | undefined {
-  return WAREHOUSES.find((w) => w.id === id);
 }

@@ -19,6 +19,7 @@ import { ProductionPage } from '@/pages/production/production-page';
 import { DocumentsPage } from '@/pages/documents/documents-page';
 import { AnnouncementsPage } from '@/pages/announcements/announcements-page';
 import { StatisticsPage } from '@/pages/statistics/statistics-page';
+import { MyProfilePage } from '@/pages/profile/my-profile-page';
 import { NotFoundPage } from '@/pages/not-found/not-found-page';
 
 export const router = createBrowserRouter([
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       { path: ROUTES.documents, element: <DocumentsPage /> },
       { path: ROUTES.announcements, element: <AnnouncementsPage /> },
       { path: ROUTES.statistics, element: <StatisticsPage /> },
+      { path: ROUTES.profile, element: <MyProfilePage /> },
     ],
   },
   {

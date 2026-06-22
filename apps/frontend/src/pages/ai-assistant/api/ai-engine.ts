@@ -3,9 +3,11 @@ import { DEPARTMENTS } from '@/mocks/departments';
 import { PARTNERS } from '@/mocks/partners';
 import { PRODUCTS, getProductById } from '@/mocks/products';
 import { getInventorySnapshot } from '@/mocks/inventory-store';
+import { getWarehouseById } from '@/mocks/warehouse-store';
 import { SALES_ORDERS } from '@/mocks/sales-orders';
 import { PRODUCTION_ORDERS, type ProductionStatus } from '@/mocks/production-orders';
-import { DOCUMENTS, CATEGORY_LABEL } from '@/mocks/documents';
+import { getDocumentSnapshot } from '@/mocks/document-store';
+import { getDocumentFolderById } from '@/mocks/document-folder-store';
 import { ANNOUNCEMENTS } from '@/mocks/announcements';
 import { PAYROLL_SEED } from '@/mocks/payroll';
 import { generateAttendance } from '@/mocks/attendance';
@@ -80,7 +82,7 @@ function toolGetLowStockProducts(ctx: AssistantContext): AssistantReply {
     sourceType: 'data',
     tableData: {
       columns: ['제품명', '현재고', '안전재고', '창고'],
-      rows: rows.map((r) => [r.product!.name, r.quantity, r.product!.safetyStock, r.warehouseId === 'wh-1' ? '1창고' : '2창고']),
+      rows: rows.map((r) => [r.product!.name, r.quantity, r.product!.safetyStock, getWarehouseById(r.warehouseId)?.name ?? r.warehouseId]),
       conditionText: '전체 창고 · 현재고 ≤ 안전재고',
       linkLabel: '재고 관리에서 보기',
       linkTo: '/inventory',
@@ -99,7 +101,7 @@ function toolGetInventoryByProduct(ctx: AssistantContext, question: string): Ass
     sourceType: 'data',
     tableData: {
       columns: ['창고', '현재고', '안전재고'],
-      rows: rows.map((r) => [r.warehouseId === 'wh-1' ? '1창고' : '2창고', r.quantity, product.safetyStock]),
+      rows: rows.map((r) => [getWarehouseById(r.warehouseId)?.name ?? r.warehouseId, r.quantity, product.safetyStock]),
       conditionText: `제품: ${product.name}`,
       linkLabel: '제품 상세에서 보기',
       linkTo: `/products/${product.id}`,
@@ -280,8 +282,8 @@ function toolGetAnnouncements(): AssistantReply {
 }
 
 function toolSearchInternalDocuments(question: string): AssistantReply {
-  const scored = DOCUMENTS.filter((d) => d.isPublic).map((d) => {
-    const haystack = `${d.title} ${d.summary} ${CATEGORY_LABEL[d.category]}`;
+  const scored = getDocumentSnapshot().filter((d) => d.isPublic && d.indexStatus === 'DONE').map((d) => {
+    const haystack = `${d.title} ${d.summary} ${getDocumentFolderById(d.folderId)?.name ?? ''}`;
     const score = haystack.includes(question) ? 1 : question.split(/\s+/).filter((token) => token.length > 1 && haystack.includes(token)).length;
     return { doc: d, score };
   });

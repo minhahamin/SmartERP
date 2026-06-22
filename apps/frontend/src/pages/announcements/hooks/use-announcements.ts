@@ -3,7 +3,9 @@ import {
   createAnnouncement,
   listAnnouncements,
   markAnnouncementRead,
+  updateAnnouncement,
   type CreateAnnouncementInput,
+  type UpdateAnnouncementInput,
 } from '@/pages/announcements/api/announcements-api';
 import { toast } from '@/stores/toast-store';
 
@@ -20,6 +22,17 @@ export function useCreateAnnouncement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ANNOUNCEMENTS_KEY });
       toast({ title: '공지사항이 게시되었습니다.', variant: 'success' });
+    },
+  });
+}
+
+export function useUpdateAnnouncement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateAnnouncementInput }) => updateAnnouncement(id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ANNOUNCEMENTS_KEY });
+      toast({ title: '공지사항이 수정되었습니다.', variant: 'success' });
     },
   });
 }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { useCreateStockMovement } from '@/pages/stock-movements/hooks/use-stock-movements';
 import { checkAvailableStock } from '@/pages/stock-movements/api/stock-movements-api';
-import { PRODUCTS, WAREHOUSES } from '@/mocks/products';
+import { useWarehouses } from '@/pages/inventory/hooks/use-warehouses';
+import { PRODUCTS } from '@/mocks/products';
 import { useAuthStore } from '@/stores/auth-store';
 import type { StockMovementType, StockRefType } from '@/mocks/stock-movements';
 
@@ -27,7 +28,7 @@ const REF_TYPE_LABEL: Record<StockRefType, string> = {
 
 function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementFormDialogProps) {
   const [productId, setProductId] = useState(PRODUCTS[0].id);
-  const [warehouseId, setWarehouseId] = useState(WAREHOUSES[0].id);
+  const [warehouseId, setWarehouseId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [refType, setRefType] = useState<StockRefType>(mode === 'IN' ? 'PURCHASE' : 'SALES');
   const [memo, setMemo] = useState('');
@@ -35,6 +36,13 @@ function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementForm
 
   const user = useAuthStore((state) => state.user);
   const createMovement = useCreateStockMovement();
+  const { data: warehouses } = useWarehouses();
+
+  useEffect(() => {
+    if (!warehouseId && warehouses && warehouses.length > 0) {
+      setWarehouseId(warehouses[0].id);
+    }
+  }, [warehouses, warehouseId]);
 
   const submit = () => {
     if (!user) return;
@@ -94,7 +102,7 @@ function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementForm
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {WAREHOUSES.map((w) => (
+                      {(warehouses ?? []).map((w) => (
                         <SelectItem key={w.id} value={w.id}>
                           {w.name}
                         </SelectItem>

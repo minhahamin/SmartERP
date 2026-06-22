@@ -3,6 +3,7 @@ import { DEPARTMENTS } from '@/mocks/departments';
 import { PARTNERS } from '@/mocks/partners';
 import { PRODUCTS } from '@/mocks/products';
 import { getInventorySnapshot } from '@/mocks/inventory-store';
+import { getWarehouseById } from '@/mocks/warehouse-store';
 import { SALES_ORDERS } from '@/mocks/sales-orders';
 import { ROLE_LABEL, type RoleName } from '@/types/auth';
 import { delay } from '@/mocks/delay';
@@ -60,7 +61,7 @@ export async function getInventoryStats(): Promise<InventoryStats> {
     byWarehouseMap.set(record.warehouseId, (byWarehouseMap.get(record.warehouseId) ?? 0) + record.quantity);
   }
   const byWarehouse = Array.from(byWarehouseMap.entries()).map(([warehouseId, qty]) => ({
-    label: warehouseId === 'wh-1' ? '1창고' : '2창고',
+    label: getWarehouseById(warehouseId)?.name ?? warehouseId,
     value: qty,
   }));
 

@@ -5,32 +5,38 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUploadDocument } from '@/pages/documents/hooks/use-documents';
+import { useDocumentFolders } from '@/pages/documents/hooks/use-folders';
 import { useAuthStore } from '@/stores/auth-store';
-import { CATEGORY_LABEL, type DocumentCategory } from '@/mocks/documents';
 
 interface UploadFormDialogProps {
   file: File | null;
   onOpenChange: (open: boolean) => void;
+  defaultFolderId?: string;
 }
 
-function UploadFormDialog({ file, onOpenChange }: UploadFormDialogProps) {
+function UploadFormDialog({ file, onOpenChange, defaultFolderId }: UploadFormDialogProps) {
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<DocumentCategory>('ETC');
+  const [folderId, setFolderId] = useState('');
   const user = useAuthStore((state) => state.user);
   const uploadDocument = useUploadDocument();
+  const { data: folders } = useDocumentFolders();
 
   useEffect(() => {
-    if (file) setTitle(file.name.replace(/\.[^/.]+$/, ''));
+    if (file) {
+      setTitle(file.name.replace(/\.[^/.]+$/, ''));
+      setFolderId(defaultFolderId && defaultFolderId !== 'ALL' ? defaultFolderId : folders?.[0]?.id ?? '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);
 
   if (!file) return null;
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!user) return;
+    if (!user || !folderId) return;
     const fileType = file.name.split('.').pop()?.toUpperCase() ?? 'FILE';
     uploadDocument.mutate(
-      { title, category, fileType, fileSize: file.size, uploadedBy: user.id },
+      { title, folderId, fileType, fileSize: file.size, uploadedBy: user.id },
       { onSuccess: () => onOpenChange(false) },
     );
   };
@@ -48,15 +54,15 @@ function UploadFormDialog({ file, onOpenChange }: UploadFormDialogProps) {
               <Input id="doc-title" required value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>카테고리</Label>
-              <Select value={category} onValueChange={(value) => setCategory(value as DocumentCategory)}>
+              <Label>폴더</Label>
+              <Select value={folderId} onValueChange={setFolderId}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(CATEGORY_LABEL).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
+                  {(folders ?? []).map((folder) => (
+                    <SelectItem key={folder.id} value={folder.id}>
+                      {folder.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

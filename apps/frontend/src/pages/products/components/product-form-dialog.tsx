@@ -3,6 +3,7 @@ import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTi
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ProductImageUpload } from '@/pages/products/components/product-image-upload';
 import { useCreateProduct, useUpdateProduct } from '@/pages/products/hooks/use-products';
 import type { Product } from '@/mocks/products';
 
@@ -12,7 +13,16 @@ interface ProductFormDialogProps {
   product?: Product;
 }
 
-const EMPTY_FORM = { sku: '', name: '', category: '', unit: 'EA', salePrice: 0, costPrice: 0, safetyStock: 0 };
+const EMPTY_FORM = {
+  sku: '',
+  name: '',
+  category: '',
+  unit: 'EA',
+  salePrice: 0,
+  costPrice: 0,
+  safetyStock: 0,
+  imageUrl: undefined as string | undefined,
+};
 
 function ProductFormDialog({ open, onOpenChange, product }: ProductFormDialogProps) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -33,6 +43,7 @@ function ProductFormDialog({ open, onOpenChange, product }: ProductFormDialogPro
               salePrice: product.salePrice,
               costPrice: product.costPrice,
               safetyStock: product.safetyStock,
+              imageUrl: product.imageUrl,
             }
           : EMPTY_FORM,
       );
@@ -56,6 +67,7 @@ function ProductFormDialog({ open, onOpenChange, product }: ProductFormDialogPro
             <DialogTitle>{isEdit ? '제품 정보 수정' : '제품 등록'}</DialogTitle>
           </DialogHeader>
           <DialogBody>
+            <ProductImageUpload value={form.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="product-name">제품명</Label>

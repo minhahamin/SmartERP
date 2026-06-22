@@ -14,7 +14,13 @@ import type { Announcement } from '@/mocks/announcements';
 function AnnouncementsPage() {
   const { data: announcements, isLoading } = useAnnouncements();
   const [formOpen, setFormOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | undefined>(undefined);
   const [selected, setSelected] = useState<Announcement | null>(null);
+
+  const openCreateForm = () => {
+    setEditingAnnouncement(undefined);
+    setFormOpen(true);
+  };
 
   const pinned = announcements?.filter((a) => a.isPinned) ?? [];
   const others = announcements?.filter((a) => !a.isPinned) ?? [];
@@ -25,7 +31,7 @@ function AnnouncementsPage() {
         title="공지사항"
         description="전사/부서 공지를 작성하고 읽음 현황을 확인합니다."
         actions={
-          <Button onClick={() => setFormOpen(true)}>
+          <Button onClick={openCreateForm}>
             <Plus /> 공지 작성
           </Button>
         }
@@ -54,8 +60,16 @@ function AnnouncementsPage() {
         </div>
       )}
 
-      <AnnouncementFormDialog open={formOpen} onOpenChange={setFormOpen} />
-      <AnnouncementDetailDrawer announcement={selected} onOpenChange={(open) => !open && setSelected(null)} />
+      <AnnouncementFormDialog open={formOpen} onOpenChange={setFormOpen} announcement={editingAnnouncement} />
+      <AnnouncementDetailDrawer
+        announcement={selected}
+        onOpenChange={(open) => !open && setSelected(null)}
+        onEdit={(announcement) => {
+          setSelected(null);
+          setEditingAnnouncement(announcement);
+          setFormOpen(true);
+        }}
+      />
     </div>
   );
 }

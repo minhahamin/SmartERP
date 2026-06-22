@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tag } from '@/components/ui/tag';
 import { getTotalStock } from '@/pages/products/components/product-helpers';
@@ -35,7 +36,18 @@ function ProductTable({ products }: { products: Product[] }) {
               onClick={() => navigate(`${ROUTES.products}/${product.id}`)}
             >
               <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{product.sku}</td>
-              <td className="px-4 py-2.5 font-medium text-foreground">{product.name}</td>
+              <td className="px-4 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-100 text-muted-foreground">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} className="size-full object-cover" />
+                    ) : (
+                      <Package className="size-4" />
+                    )}
+                  </div>
+                  <span className="font-medium text-foreground">{product.name}</span>
+                </div>
+              </td>
               <td className="px-4 py-2.5">
                 <Tag>{product.category}</Tag>
               </td>
