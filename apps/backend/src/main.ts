@@ -2,10 +2,11 @@ import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { buildSwaggerDocument } from './swagger.config';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -30,14 +31,10 @@ async function bootstrap() {
     }),
   );
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('ERPilot API')
-    .setDescription('AI 기반 ERP SaaS 플랫폼 API 문서')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/v1/docs', app, swaggerDocument);
+  const swaggerDocument = buildSwaggerDocument(app);
+  SwaggerModule.setup('api/v1/docs', app, swaggerDocument, {
+    swaggerOptions: { persistAuthorization: true, tagsSorter: 'alpha' },
+  });
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

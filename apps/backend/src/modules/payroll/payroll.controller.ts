@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -44,17 +44,23 @@ export class PayrollController {
   }
 
   @Post(':id/confirm')
+  @HttpCode(200)
   @RequirePermissions('PAYROLL', 'APPROVE')
   @Audit('PAYROLL_CONFIRM', 'PAYROLL')
-  @ApiOperation({ summary: '확정 (DRAFT → CONFIRMED)' })
+  @ApiOperation({
+    summary: '확정 (DRAFT → CONFIRMED, 이미 확정된 경우 200으로 현재 상태 반환 — docs/08.1 멱등성)',
+  })
   confirm(@Param('id') id: string) {
     return this.payrollService.confirm(id);
   }
 
   @Post(':id/pay')
+  @HttpCode(200)
   @RequirePermissions('PAYROLL', 'APPROVE')
   @Audit('PAYROLL_PAY', 'PAYROLL')
-  @ApiOperation({ summary: '지급 처리 (CONFIRMED → PAID)' })
+  @ApiOperation({
+    summary: '지급 처리 (CONFIRMED → PAID, 이미 지급된 경우 200으로 현재 상태 반환 — docs/08.1 멱등성)',
+  })
   pay(@Param('id') id: string) {
     return this.payrollService.pay(id);
   }

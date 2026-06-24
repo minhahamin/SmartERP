@@ -24,6 +24,18 @@ npm run dev            # http://localhost:3000/api/v1, Swagger: /api/v1/docs
 | SALES_MANAGER | minjun.kim@erpilot.io |
 | EMPLOYEE | jihoon.park@erpilot.io |
 
+## API 문서 (Swagger)
+
+`npm run dev`로 서버를 띄우면 `http://localhost:3000/api/v1/docs`에서 인터랙티브 Swagger UI를 볼 수 있다
+(우측 상단 Authorize에 로그인으로 받은 Access Token을 넣으면 "Try it out"으로 실제 호출도 가능하다).
+태그는 도메인 단위로 정리되어 있다(Auth/Users/Payroll/Inventory/...), 설정은 `src/swagger.config.ts`.
+
+DB 없이 스펙만 뽑아보고 싶다면(NestFactory.create()는 listen() 전까지 DB에 연결하지 않는다):
+
+```bash
+npm run swagger:generate   # 프로젝트 루트에 openapi.json 생성 (git에는 포함하지 않음)
+```
+
 ## 구조
 
 ```
