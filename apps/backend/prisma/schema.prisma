@@ -124,6 +124,9 @@ model User {
   roleId           String
   position         String?
   hireDate         DateTime?
+  // docs/07은 별도 급여 계약 테이블을 정의하지 않으므로, "/payrolls/generate"가 기준으로 삼을
+  // 기본급을 직원 레코드에 직접 둔다(향후 직급/호봉 테이블로 분리 가능한 자리).
+  baseSalary       Decimal?   @db.Decimal(12, 0)
   status           UserStatus @default(ACTIVE)
   refreshTokenHash String?
   // docs/07은 명시하지 않지만 docs/12.3의 회전(Rotation)/재사용 탐지/만료를 서버에서
@@ -415,9 +418,10 @@ model Warehouse {
   location  String?
   managerId String?
 
-  company        Company         @relation(fields: [companyId], references: [id])
-  inventories    Inventory[]
-  stockMovements StockMovement[]
+  company          Company           @relation(fields: [companyId], references: [id])
+  inventories      Inventory[]
+  stockMovements   StockMovement[]
+  productionOrders ProductionOrder[]
 
   @@map("warehouses")
 }
@@ -483,10 +487,14 @@ model ProductionOrder {
   startDate   DateTime         @db.Date
   dueDate     DateTime         @db.Date
   managerId   String?
+  // docs/08.4.4 "완료 시 입고 자동 생성"을 구현하려면 입고될 창고가 필요한데 docs/07에는
+  // 컬럼이 없어 추가했다(완료 처리 시 이 창고로 producedQty만큼 IN StockMovement를 생성).
+  warehouseId String?
   createdAt   DateTime         @default(now())
 
-  company Company @relation(fields: [companyId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  company   Company    @relation(fields: [companyId], references: [id])
+  product   Product    @relation(fields: [productId], references: [id])
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
 
   @@unique([companyId, orderNo])
   @@index([status, dueDate])

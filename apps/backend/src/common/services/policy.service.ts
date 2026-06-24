@@ -27,4 +27,15 @@ export class PolicyService {
       throw new ForbiddenException(`'${resource}' 리소스에 대한 '${action}' 권한이 없습니다.`);
     }
   }
+
+  /**
+   * Schedule/ProductionOrder처럼 같은 RolePermission 행을 ADMIN/HR_MANAGER(전체)와
+   * SALES_MANAGER/EMPLOYEE(본인 한정)가 함께 보유해 RBAC 테이블만으로는 "본인 것만" 제약을
+   * 표현할 수 없는 리소스에 사용한다 — 지정한 역할이거나 본인 소유일 때만 허용한다.
+   */
+  assertOwnerOrRole(user: AuthUser, ownerId: string, allowedRoleNames: string[]): void {
+    if (ownerId === user.sub) return;
+    if (allowedRoleNames.includes(user.roleName)) return;
+    throw new ForbiddenException('이 작업에 대한 권한이 없습니다.');
+  }
 }
