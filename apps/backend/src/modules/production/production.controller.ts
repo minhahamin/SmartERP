@@ -41,7 +41,11 @@ export class ProductionController {
   @RequirePermissions('PRODUCTION', 'UPDATE')
   @Audit('PRODUCTION_STATUS_CHANGE', 'PRODUCTION')
   @ApiOperation({ summary: '상태 변경(완료 시 입고 자동 생성)' })
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateProductionStatusDto, @CurrentUser() user: AuthUser) {
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateProductionStatusDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.productionService.updateStatus(id, dto, user);
   }
 }

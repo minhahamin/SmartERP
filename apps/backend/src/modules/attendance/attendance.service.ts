@@ -24,7 +24,10 @@ export class AttendanceService {
     }
     if (query.departmentId) where.user = { ...(where.user as object), departmentId: query.departmentId };
     if (query.from || query.to) {
-      where.workDate = { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lte: new Date(query.to) } : {}) };
+      where.workDate = {
+        ...(query.from ? { gte: new Date(query.from) } : {}),
+        ...(query.to ? { lte: new Date(query.to) } : {}),
+      };
     }
 
     const [items, total] = await Promise.all([
@@ -46,7 +49,12 @@ export class AttendanceService {
       where: {
         userId,
         ...(query.from || query.to
-          ? { workDate: { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lte: new Date(query.to) } : {}) } }
+          ? {
+              workDate: {
+                ...(query.from ? { gte: new Date(query.from) } : {}),
+                ...(query.to ? { lte: new Date(query.to) } : {}),
+              },
+            }
           : {}),
       },
       orderBy: { workDate: 'desc' },
@@ -56,7 +64,9 @@ export class AttendanceService {
   /** docs/02 2.2 — EMPLOYEE/SALES_MANAGER도 "C(own 출퇴근)"으로 본인 체크인은 항상 허용 */
   async checkIn(requester: AuthUser) {
     const workDate = todayDateOnly();
-    const existing = await this.prisma.attendance.findUnique({ where: { userId_workDate: { userId: requester.sub, workDate } } });
+    const existing = await this.prisma.attendance.findUnique({
+      where: { userId_workDate: { userId: requester.sub, workDate } },
+    });
     if (existing?.checkInAt) throw new BadRequestException('이미 출근 처리되었습니다.');
 
     return this.prisma.attendance.upsert({
@@ -68,7 +78,9 @@ export class AttendanceService {
 
   async checkOut(requester: AuthUser) {
     const workDate = todayDateOnly();
-    const existing = await this.prisma.attendance.findUnique({ where: { userId_workDate: { userId: requester.sub, workDate } } });
+    const existing = await this.prisma.attendance.findUnique({
+      where: { userId_workDate: { userId: requester.sub, workDate } },
+    });
     if (!existing?.checkInAt) throw new BadRequestException('출근 기록이 없습니다. 먼저 출근 처리해 주세요.');
     if (existing.checkOutAt) throw new BadRequestException('이미 퇴근 처리되었습니다.');
 

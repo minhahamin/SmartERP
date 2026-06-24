@@ -32,7 +32,9 @@ export class PermissionsGuard implements CanActivate {
     });
 
     if (!hasPermission) {
-      throw new ForbiddenException(`'${required.resource}' 리소스에 대한 '${required.action}' 권한이 없습니다.`);
+      throw new ForbiddenException(
+        `'${required.resource}' 리소스에 대한 '${required.action}' 권한이 없습니다.`,
+      );
     }
     return true;
   }

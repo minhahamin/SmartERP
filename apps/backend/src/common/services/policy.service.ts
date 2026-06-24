@@ -20,7 +20,12 @@ export class PolicyService {
   }
 
   /** ownerId가 본인이면 무조건 허용, 아니면 RolePermission 보유 여부로 판단 */
-  async assertAccess(user: AuthUser, resource: string, action: PermissionAction, ownerId?: string): Promise<void> {
+  async assertAccess(
+    user: AuthUser,
+    resource: string,
+    action: PermissionAction,
+    ownerId?: string,
+  ): Promise<void> {
     if (ownerId && ownerId === user.sub) return;
     const granted = await this.hasPermission(user, resource, action);
     if (!granted) {

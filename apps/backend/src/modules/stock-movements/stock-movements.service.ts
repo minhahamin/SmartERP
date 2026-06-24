@@ -16,7 +16,10 @@ export class StockMovementsService {
     if (query.productId) where.productId = query.productId;
     if (query.type) where.type = query.type;
     if (query.from || query.to) {
-      where.createdAt = { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lte: new Date(query.to) } : {}) };
+      where.createdAt = {
+        ...(query.from ? { gte: new Date(query.from) } : {}),
+        ...(query.to ? { lte: new Date(query.to) } : {}),
+      };
     }
 
     const [items, total] = await Promise.all([

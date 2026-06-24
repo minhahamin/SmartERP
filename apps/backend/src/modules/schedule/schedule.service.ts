@@ -16,7 +16,15 @@ export class ScheduleService {
 
   /** docs/02 2.2 — ADMIN/HR_MANAGER는 전체, 그 외는 본인 일정 + 공개(부서/전사) 일정만 조회 */
   async findAll(query: ScheduleQueryDto, requester: AuthUser) {
-    const range = query.from || query.to ? { startAt: { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lte: new Date(query.to) } : {}) } } : {};
+    const range =
+      query.from || query.to
+        ? {
+            startAt: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {};
 
     const where: Record<string, unknown> = { companyId: requester.companyId, ...range };
     if (!FULL_ACCESS_ROLES.includes(requester.roleName)) {
@@ -54,7 +62,11 @@ export class ScheduleService {
 
     return this.prisma.schedule.update({
       where: { id },
-      data: { ...dto, ...(dto.startAt ? { startAt: new Date(dto.startAt) } : {}), ...(dto.endAt ? { endAt: new Date(dto.endAt) } : {}) },
+      data: {
+        ...dto,
+        ...(dto.startAt ? { startAt: new Date(dto.startAt) } : {}),
+        ...(dto.endAt ? { endAt: new Date(dto.endAt) } : {}),
+      },
     });
   }
 

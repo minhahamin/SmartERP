@@ -23,7 +23,9 @@ export class AuditLogInterceptor implements NestInterceptor {
     ]);
     if (!meta) return next.handle();
 
-    const request = context.switchToHttp().getRequest<{ user?: AuthUser; params: Record<string, string>; ip: string }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<{ user?: AuthUser; params: Record<string, string>; ip: string }>();
 
     return next.handle().pipe(
       tap(() => {

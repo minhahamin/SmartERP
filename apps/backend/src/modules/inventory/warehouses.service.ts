@@ -8,11 +8,16 @@ export class WarehousesService {
   constructor(private readonly prisma: PrismaService) {}
 
   findAll(requester: AuthUser) {
-    return this.prisma.warehouse.findMany({ where: { companyId: requester.companyId }, orderBy: { name: 'asc' } });
+    return this.prisma.warehouse.findMany({
+      where: { companyId: requester.companyId },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async findOne(id: string, requester: AuthUser) {
-    const warehouse = await this.prisma.warehouse.findFirst({ where: { id, companyId: requester.companyId } });
+    const warehouse = await this.prisma.warehouse.findFirst({
+      where: { id, companyId: requester.companyId },
+    });
     if (!warehouse) throw new NotFoundException('창고를 찾을 수 없습니다.');
     return warehouse;
   }

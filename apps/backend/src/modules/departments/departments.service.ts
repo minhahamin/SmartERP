@@ -15,7 +15,9 @@ export class DepartmentsService {
   }
 
   async findOne(id: string, requester: AuthUser) {
-    const department = await this.prisma.department.findFirst({ where: { id, companyId: requester.companyId } });
+    const department = await this.prisma.department.findFirst({
+      where: { id, companyId: requester.companyId },
+    });
     if (!department) throw new NotFoundException('부서를 찾을 수 없습니다.');
     return department;
   }
@@ -26,7 +28,8 @@ export class DepartmentsService {
 
   async update(id: string, dto: UpdateDepartmentDto, requester: AuthUser) {
     await this.findOne(id, requester);
-    if (dto.parentId === id) throw new BadRequestException('부서는 자기 자신을 상위 부서로 가질 수 없습니다.');
+    if (dto.parentId === id)
+      throw new BadRequestException('부서는 자기 자신을 상위 부서로 가질 수 없습니다.');
     return this.prisma.department.update({ where: { id }, data: dto });
   }
 

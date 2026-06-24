@@ -11,7 +11,9 @@ export class ProductionOrderQueryDto extends PaginationQueryDto {
   @IsEnum(ProductionStatus)
   status?: ProductionStatus;
 
-  @ApiPropertyOptional({ description: 'true면 완료/취소되지 않았고 dueDate가 지난 오더만 조회 (docs/07 7.5 인덱스 목적)' })
+  @ApiPropertyOptional({
+    description: 'true면 완료/취소되지 않았고 dueDate가 지난 오더만 조회 (docs/07 7.5 인덱스 목적)',
+  })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()

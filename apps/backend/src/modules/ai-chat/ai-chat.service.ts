@@ -5,7 +5,8 @@ import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { SendMessageDto } from './dto/send-message.dto';
 
 /** docs/09~11(Function Calling/RAG/pgvector)이 실제로 구현되기 전까지 노출하는 안내 문구 */
-const AI_NOT_WIRED_MESSAGE = 'AI 응답 생성 파이프라인은 아직 연동되지 않았습니다. (docs/09~11 RAG·Function Calling 설계 구현 필요)';
+const AI_NOT_WIRED_MESSAGE =
+  'AI 응답 생성 파이프라인은 아직 연동되지 않았습니다. (docs/09~11 RAG·Function Calling 설계 구현 필요)';
 
 @Injectable()
 export class AiChatService {
@@ -49,12 +50,15 @@ export class AiChatService {
   private async handleMessage(sessionId: string, dto: SendMessageDto, requester: AuthUser) {
     await this.assertOwnSession(sessionId, requester);
     await this.prisma.chatMessage.create({ data: { sessionId, role: 'USER', content: dto.content } });
-    return this.prisma.chatMessage.create({ data: { sessionId, role: 'ASSISTANT', content: AI_NOT_WIRED_MESSAGE } });
+    return this.prisma.chatMessage.create({
+      data: { sessionId, role: 'ASSISTANT', content: AI_NOT_WIRED_MESSAGE },
+    });
   }
 
   private async assertOwnSession(sessionId: string, requester: AuthUser) {
     const session = await this.prisma.chatSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('대화 세션을 찾을 수 없습니다.');
-    if (session.userId !== requester.sub) throw new ForbiddenException('본인의 대화 세션만 조회할 수 있습니다.');
+    if (session.userId !== requester.sub)
+      throw new ForbiddenException('본인의 대화 세션만 조회할 수 있습니다.');
   }
 }

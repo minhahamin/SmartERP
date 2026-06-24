@@ -19,7 +19,7 @@ export class PaginationQueryDto {
   @Max(100)
   limit: number = 20;
 
-  @ApiPropertyOptional({ description: "정렬 (예: -createdAt)" })
+  @ApiPropertyOptional({ description: '정렬 (예: -createdAt)' })
   @IsOptional()
   @IsString()
   sort?: string;

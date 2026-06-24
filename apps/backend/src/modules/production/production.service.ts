@@ -40,7 +40,9 @@ export class ProductionService {
   }
 
   async findOne(id: string, requester: AuthUser) {
-    const order = await this.prisma.productionOrder.findFirst({ where: { id, companyId: requester.companyId } });
+    const order = await this.prisma.productionOrder.findFirst({
+      where: { id, companyId: requester.companyId },
+    });
     if (!order) throw new NotFoundException('생산 오더를 찾을 수 없습니다.');
     return order;
   }
@@ -65,7 +67,8 @@ export class ProductionService {
     this.policy.assertOwnerOrRole(requester, order.managerId ?? '', FULL_ACCESS_ROLES);
 
     if (dto.status === 'COMPLETED') {
-      if (!order.warehouseId) throw new BadRequestException('완료 처리하려면 입고 창고를 먼저 지정해야 합니다.');
+      if (!order.warehouseId)
+        throw new BadRequestException('완료 처리하려면 입고 창고를 먼저 지정해야 합니다.');
       const producedQty = dto.producedQty ?? order.plannedQty;
 
       return this.prisma.$transaction(async (tx) => {
@@ -91,7 +94,10 @@ export class ProductionService {
 
     return this.prisma.productionOrder.update({
       where: { id },
-      data: { status: dto.status, ...(dto.producedQty !== undefined ? { producedQty: dto.producedQty } : {}) },
+      data: {
+        status: dto.status,
+        ...(dto.producedQty !== undefined ? { producedQty: dto.producedQty } : {}),
+      },
     });
   }
 

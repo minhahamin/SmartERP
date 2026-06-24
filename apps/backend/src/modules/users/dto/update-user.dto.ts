@@ -4,7 +4,10 @@ import { UserStatus } from '@prisma/client';
 import { CreateUserDto } from './create-user.dto';
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {
-  @ApiPropertyOptional({ enum: UserStatus, description: '퇴사 처리는 DELETE 대신 status=RESIGNED로 소프트 삭제 (docs/07 7.6 #2)' })
+  @ApiPropertyOptional({
+    enum: UserStatus,
+    description: '퇴사 처리는 DELETE 대신 status=RESIGNED로 소프트 삭제 (docs/07 7.6 #2)',
+  })
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;

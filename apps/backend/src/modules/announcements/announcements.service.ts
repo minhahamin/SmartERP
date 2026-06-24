@@ -9,19 +9,30 @@ export class AnnouncementsService {
 
   async findAll(requester: AuthUser) {
     const announcements = await this.prisma.announcement.findMany({
-      where: { companyId: requester.companyId, OR: [{ targetRoleId: null }, { targetRoleId: requester.roleId }] },
+      where: {
+        companyId: requester.companyId,
+        OR: [{ targetRoleId: null }, { targetRoleId: requester.roleId }],
+      },
       orderBy: [{ isPinned: 'desc' }, { publishedAt: 'desc' }],
     });
     const readIds = new Set(
-      (await this.prisma.announcementRead.findMany({ where: { userId: requester.sub }, select: { announcementId: true } })).map(
-        (r) => r.announcementId,
-      ),
+      (
+        await this.prisma.announcementRead.findMany({
+          where: { userId: requester.sub },
+          select: { announcementId: true },
+        })
+      ).map((r) => r.announcementId),
     );
-    return announcements.map((announcement) => ({ ...announcement, isReadByMe: readIds.has(announcement.id) }));
+    return announcements.map((announcement) => ({
+      ...announcement,
+      isReadByMe: readIds.has(announcement.id),
+    }));
   }
 
   async findOne(id: string, requester: AuthUser) {
-    const announcement = await this.prisma.announcement.findFirst({ where: { id, companyId: requester.companyId } });
+    const announcement = await this.prisma.announcement.findFirst({
+      where: { id, companyId: requester.companyId },
+    });
     if (!announcement) throw new NotFoundException('공지사항을 찾을 수 없습니다.');
     return announcement;
   }

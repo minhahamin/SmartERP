@@ -57,7 +57,8 @@ export class LeaveService {
   async cancel(id: string, requester: AuthUser) {
     const request = await this.prisma.leaveRequest.findUnique({ where: { id } });
     if (!request) throw new NotFoundException('휴가 신청을 찾을 수 없습니다.');
-    if (request.userId !== requester.sub) throw new ForbiddenException('본인의 휴가 신청만 취소할 수 있습니다.');
+    if (request.userId !== requester.sub)
+      throw new ForbiddenException('본인의 휴가 신청만 취소할 수 있습니다.');
     if (request.status !== 'PENDING') throw new BadRequestException('대기 중인 신청만 취소할 수 있습니다.');
 
     await this.prisma.leaveRequest.delete({ where: { id } });
@@ -76,7 +77,15 @@ export class LeaveService {
 
   async findBalance(userId: string, year: number) {
     const balance = await this.prisma.leaveBalance.findUnique({ where: { userId_year: { userId, year } } });
-    return balance ?? { userId, year, totalDays: DEFAULT_ANNUAL_LEAVE_DAYS, usedDays: 0, remainingDays: DEFAULT_ANNUAL_LEAVE_DAYS };
+    return (
+      balance ?? {
+        userId,
+        year,
+        totalDays: DEFAULT_ANNUAL_LEAVE_DAYS,
+        usedDays: 0,
+        remainingDays: DEFAULT_ANNUAL_LEAVE_DAYS,
+      }
+    );
   }
 
   private async transitionStatus(id: string, status: 'APPROVED' | 'REJECTED', requester: AuthUser) {
@@ -91,13 +100,22 @@ export class LeaveService {
     const existing = await this.prisma.leaveBalance.findUnique({ where: { userId_year: { userId, year } } });
     if (!existing) {
       await this.prisma.leaveBalance.create({
-        data: { userId, year, totalDays: DEFAULT_ANNUAL_LEAVE_DAYS, usedDays: days, remainingDays: DEFAULT_ANNUAL_LEAVE_DAYS - days },
+        data: {
+          userId,
+          year,
+          totalDays: DEFAULT_ANNUAL_LEAVE_DAYS,
+          usedDays: days,
+          remainingDays: DEFAULT_ANNUAL_LEAVE_DAYS - days,
+        },
       });
       return;
     }
     await this.prisma.leaveBalance.update({
       where: { userId_year: { userId, year } },
-      data: { usedDays: Number(existing.usedDays) + days, remainingDays: Number(existing.remainingDays) - days },
+      data: {
+        usedDays: Number(existing.usedDays) + days,
+        remainingDays: Number(existing.remainingDays) - days,
+      },
     });
   }
 }

@@ -46,7 +46,10 @@ export class AuthService {
     if (!refreshToken) throw new UnauthorizedException('Refresh Token이 없습니다. 다시 로그인해 주세요.');
     const tokenHash = this.tokenService.hashRefreshToken(refreshToken);
 
-    const user = await this.prisma.user.findFirst({ where: { refreshTokenHash: tokenHash }, include: { role: true } });
+    const user = await this.prisma.user.findFirst({
+      where: { refreshTokenHash: tokenHash },
+      include: { role: true },
+    });
     if (user) {
       if (!user.refreshTokenExpiresAt || user.refreshTokenExpiresAt < new Date()) {
         await this.invalidateSessions(user.id);
@@ -58,7 +61,9 @@ export class AuthService {
     const reused = await this.prisma.user.findFirst({ where: { previousRefreshTokenHash: tokenHash } });
     if (reused) {
       await this.invalidateSessions(reused.id);
-      throw new UnauthorizedException('Refresh Token 재사용이 감지되어 모든 세션이 종료되었습니다. 다시 로그인해 주세요.');
+      throw new UnauthorizedException(
+        'Refresh Token 재사용이 감지되어 모든 세션이 종료되었습니다. 다시 로그인해 주세요.',
+      );
     }
 
     throw new UnauthorizedException('유효하지 않은 Refresh Token입니다. 다시 로그인해 주세요.');
@@ -115,7 +120,13 @@ export class AuthService {
       accessToken,
       refreshToken,
       refreshTokenExpiresAt,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role.name, departmentId: user.departmentId },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role.name,
+        departmentId: user.departmentId,
+      },
     };
   }
 }

@@ -7,7 +7,7 @@ import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { AttendanceService } from '../attendance/attendance.service';
 import { AttendanceQueryDto } from '../attendance/dto/attendance-query.dto';
 import { PayrollService } from '../payroll/payroll.service';
-import { PayrollHistoryQueryDto } from '../payroll/dto/payroll-history-query.dto';
+import { PayrollHistoryQueryDto } from '../payroll/dto/payroll.dto';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -62,13 +62,21 @@ export class UsersController {
 
   @Get(':id/attendances')
   @ApiOperation({ summary: '근태 이력 (ATTENDANCE:READ 또는 본인)' })
-  findAttendances(@Param('id') id: string, @Query() query: AttendanceQueryDto, @CurrentUser() user: AuthUser) {
+  findAttendances(
+    @Param('id') id: string,
+    @Query() query: AttendanceQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.attendanceService.findHistoryForUser(id, query, user);
   }
 
   @Get(':id/payrolls')
   @ApiOperation({ summary: '급여 이력 (PAYROLL:READ 또는 본인)' })
-  findPayrolls(@Param('id') id: string, @Query() query: PayrollHistoryQueryDto, @CurrentUser() user: AuthUser) {
+  findPayrolls(
+    @Param('id') id: string,
+    @Query() query: PayrollHistoryQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.payrollService.findHistoryForUser(id, query, user);
   }
 }

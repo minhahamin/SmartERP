@@ -11,7 +11,9 @@ interface SuccessEnvelope<T> {
 }
 
 function isPaginatedResult(value: unknown): value is PaginatedResult<unknown> {
-  return Boolean(value) && typeof value === 'object' && 'items' in (value as object) && 'meta' in (value as object);
+  return (
+    Boolean(value) && typeof value === 'object' && 'items' in (value as object) && 'meta' in (value as object)
+  );
 }
 
 /** docs/08-api-design.md 8.1 — 모든 성공 응답을 `{ success, data, meta? }` envelope으로 래핑한다 */

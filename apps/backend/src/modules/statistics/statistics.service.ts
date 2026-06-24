@@ -22,14 +22,24 @@ export class StatisticsService {
 
   private async getCompanyWideStats(companyId: string) {
     const now = new Date();
-    const [totalEmployees, totalDepartments, lowStockCount, delayedOrderCount, pendingLeaveCount] = await Promise.all([
-      this.prisma.user.count({ where: { companyId, status: 'ACTIVE' } }),
-      this.prisma.department.count({ where: { companyId } }),
-      this.countLowStock(companyId),
-      this.prisma.productionOrder.count({ where: { companyId, status: { notIn: ['COMPLETED', 'CANCELLED'] }, dueDate: { lt: now } } }),
-      this.prisma.leaveRequest.count({ where: { user: { companyId }, status: 'PENDING' } }),
-    ]);
-    return { scope: 'COMPANY', totalEmployees, totalDepartments, lowStockCount, delayedOrderCount, pendingLeaveCount };
+    const [totalEmployees, totalDepartments, lowStockCount, delayedOrderCount, pendingLeaveCount] =
+      await Promise.all([
+        this.prisma.user.count({ where: { companyId, status: 'ACTIVE' } }),
+        this.prisma.department.count({ where: { companyId } }),
+        this.countLowStock(companyId),
+        this.prisma.productionOrder.count({
+          where: { companyId, status: { notIn: ['COMPLETED', 'CANCELLED'] }, dueDate: { lt: now } },
+        }),
+        this.prisma.leaveRequest.count({ where: { user: { companyId }, status: 'PENDING' } }),
+      ]);
+    return {
+      scope: 'COMPANY',
+      totalEmployees,
+      totalDepartments,
+      lowStockCount,
+      delayedOrderCount,
+      pendingLeaveCount,
+    };
   }
 
   /** Prisma는 두 컬럼(quantity vs product.safetyStock) 비교를 표준 where로 표현할 수 없어 raw SQL을 사용한다 */
@@ -55,12 +65,20 @@ export class StatisticsService {
     const [totalPartners, thisMonthOrderAgg] = await Promise.all([
       this.prisma.partner.count({ where: { companyId } }),
       this.prisma.salesOrder.aggregate({
-        where: { companyId, orderDate: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } },
+        where: {
+          companyId,
+          orderDate: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+        },
         _sum: { totalAmount: true },
         _count: true,
       }),
     ]);
-    return { scope: 'SALES', totalPartners, thisMonthOrderCount: thisMonthOrderAgg._count, thisMonthOrderTotal: thisMonthOrderAgg._sum.totalAmount ?? 0 };
+    return {
+      scope: 'SALES',
+      totalPartners,
+      thisMonthOrderCount: thisMonthOrderAgg._count,
+      thisMonthOrderTotal: thisMonthOrderAgg._sum.totalAmount ?? 0,
+    };
   }
 
   private async getMyStats(requester: AuthUser) {
@@ -70,7 +88,10 @@ export class StatisticsService {
         where: { userId: requester.sub, workDate: { gte: new Date(year, new Date().getMonth(), 1) } },
       }),
       this.prisma.leaveBalance.findUnique({ where: { userId_year: { userId: requester.sub, year } } }),
-      this.prisma.payroll.findFirst({ where: { userId: requester.sub }, orderBy: [{ payYear: 'desc' }, { payMonth: 'desc' }] }),
+      this.prisma.payroll.findFirst({
+        where: { userId: requester.sub },
+        orderBy: [{ payYear: 'desc' }, { payMonth: 'desc' }],
+      }),
     ]);
     return { scope: 'SELF', attendanceThisMonthCount, leaveBalance, latestPayroll };
   }

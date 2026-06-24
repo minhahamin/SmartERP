@@ -17,7 +17,7 @@ export class UsersService {
   ) {}
 
   /** docs/02 2.2 — SALES_MANAGER는 R(dept)만 가능하므로 Permission 테이블이 구분 못 하는 부서 스코프를 여기서 강제 */
-  private async scopeWhere(requester: AuthUser) {
+  private scopeWhere(requester: AuthUser) {
     const where: Record<string, unknown> = { companyId: requester.companyId };
     if (requester.roleName === 'SALES_MANAGER') {
       where.departmentId = requester.departmentId;
@@ -26,7 +26,7 @@ export class UsersService {
   }
 
   async findAll(query: UserQueryDto, requester: AuthUser): Promise<PaginatedResult<unknown>> {
-    const where = await this.scopeWhere(requester);
+    const where = this.scopeWhere(requester);
     if (query.departmentId) where.departmentId = query.departmentId;
     if (query.status) where.status = query.status;
     if (query.search) {

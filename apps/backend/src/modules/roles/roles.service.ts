@@ -45,7 +45,8 @@ export class RolesService {
     if (role.isSystem) throw new BadRequestException('시스템 기본 제공 역할은 삭제할 수 없습니다.');
 
     const assignedUserCount = await this.prisma.user.count({ where: { roleId: id } });
-    if (assignedUserCount > 0) throw new BadRequestException('해당 역할이 배정된 직원이 있어 삭제할 수 없습니다.');
+    if (assignedUserCount > 0)
+      throw new BadRequestException('해당 역할이 배정된 직원이 있어 삭제할 수 없습니다.');
 
     await this.prisma.role.delete({ where: { id } });
     return { success: true };

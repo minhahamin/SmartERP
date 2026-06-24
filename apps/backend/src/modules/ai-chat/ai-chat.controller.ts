@@ -40,7 +40,11 @@ export class AiChatController {
   @Sse()
   @SkipResponseEnvelope()
   @ApiOperation({ summary: '질의 전송 → SSE 스트리밍 응답' })
-  sendMessage(@Param('id') id: string, @Body() dto: SendMessageDto, @CurrentUser() user: AuthUser): Observable<{ data: string }> {
+  sendMessage(
+    @Param('id') id: string,
+    @Body() dto: SendMessageDto,
+    @CurrentUser() user: AuthUser,
+  ): Observable<{ data: string }> {
     return this.aiChatService.streamReply(id, dto, user);
   }
 

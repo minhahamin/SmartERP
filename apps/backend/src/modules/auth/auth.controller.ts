@@ -29,7 +29,8 @@ export class AuthController {
   @Post('refresh')
   @ApiOperation({ summary: '토큰 재발급 (httpOnly Cookie의 refreshToken 사용, docs/12.1)' })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.refresh(req.cookies?.[REFRESH_TOKEN_COOKIE]);
+    const cookies = req.cookies as Record<string, string | undefined> | undefined;
+    const result = await this.authService.refresh(cookies?.[REFRESH_TOKEN_COOKIE]);
     this.setRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt);
     return { accessToken: result.accessToken };
   }

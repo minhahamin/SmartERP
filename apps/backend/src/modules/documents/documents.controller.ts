@@ -43,8 +43,14 @@ export class DocumentsController {
   @Audit('DOCUMENT_UPLOAD', 'DOCUMENT')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: '업로드(multipart) → 비동기 RAG 색인 트리거' })
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }))
-  upload(@UploadedFile() file: Express.Multer.File, @Body() dto: UploadDocumentDto, @CurrentUser() user: AuthUser) {
+  @UseInterceptors(
+    FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }),
+  )
+  upload(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadDocumentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.documentsService.upload(file, dto, user);
   }
 
@@ -53,8 +59,14 @@ export class DocumentsController {
   @Audit('DOCUMENT_NEW_VERSION', 'DOCUMENT')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: '새 버전 업로드' })
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }))
-  addVersion(@Param('id') id: string, @UploadedFile() file: Express.Multer.File, @CurrentUser() user: AuthUser) {
+  @UseInterceptors(
+    FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }),
+  )
+  addVersion(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.documentsService.addVersion(id, file, user);
   }
 }

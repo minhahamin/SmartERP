@@ -83,7 +83,11 @@ export class DocumentsService {
   async getSummary(id: string, requester: AuthUser) {
     const document = await this.findOne(id, requester);
     if (document.indexStatus !== 'DONE') {
-      return { documentId: id, summary: null, message: '색인이 진행 중입니다. 완료 후 AI 요약을 제공합니다.' };
+      return {
+        documentId: id,
+        summary: null,
+        message: '색인이 진행 중입니다. 완료 후 AI 요약을 제공합니다.',
+      };
     }
     // AI 요약 생성/저장은 docs/09~11(RAG 파이프라인) 범위 — 이번 작업에서는 미연동
     return { documentId: id, summary: null, message: 'AI 요약 기능은 RAG 파이프라인 연동 후 제공됩니다.' };

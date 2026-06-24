@@ -18,7 +18,10 @@ export class AuthTokenService {
   signAccessToken(payload: Omit<AuthUser, 'iat' | 'exp'>): string {
     return this.jwtService.sign(payload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: this.config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m',
+      // ConfigService가 반환하는 plain string은 jsonwebtoken의 `StringValue` 리터럴 타입과
+      // 호환되지 않아 캐스팅이 필요하다(런타임 파싱은 'ms' 패키지가 동일하게 처리).
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      expiresIn: (this.config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m') as any,
     });
   }
 

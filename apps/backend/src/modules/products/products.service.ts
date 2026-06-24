@@ -20,7 +20,12 @@ export class ProductsService {
     }
 
     const [items, total] = await Promise.all([
-      this.prisma.product.findMany({ where, orderBy: { name: 'asc' }, skip: (query.page - 1) * query.limit, take: query.limit }),
+      this.prisma.product.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
       this.prisma.product.count({ where }),
     ]);
     return paginate(items, total, query.page, query.limit);

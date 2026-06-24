@@ -5,7 +5,12 @@ import { PolicyService } from '../../common/services/policy.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
-import { GeneratePayrollDto, PayrollHistoryQueryDto, PayrollQueryDto, UpdatePayrollDto } from './dto/payroll.dto';
+import {
+  GeneratePayrollDto,
+  PayrollHistoryQueryDto,
+  PayrollQueryDto,
+  UpdatePayrollDto,
+} from './dto/payroll.dto';
 
 function sum(values: Record<string, number>): number {
   return Object.values(values).reduce((a, b) => a + b, 0);
@@ -34,7 +39,10 @@ export class PayrollService {
   }
 
   findMine(userId: string) {
-    return this.prisma.payroll.findMany({ where: { userId }, orderBy: [{ payYear: 'desc' }, { payMonth: 'desc' }] });
+    return this.prisma.payroll.findMany({
+      where: { userId },
+      orderBy: [{ payYear: 'desc' }, { payMonth: 'desc' }],
+    });
   }
 
   async findHistoryForUser(userId: string, query: PayrollHistoryQueryDto, requester: AuthUser) {
@@ -69,7 +77,11 @@ export class PayrollService {
   async update(id: string, dto: UpdatePayrollDto) {
     const payroll = await this.findOrThrow(id);
     if (payroll.status !== 'DRAFT') {
-      throw new AppException('PAYROLL_ALREADY_CONFIRMED', '확정된 급여는 수당/공제를 수정할 수 없습니다.', 409);
+      throw new AppException(
+        'PAYROLL_ALREADY_CONFIRMED',
+        '확정된 급여는 수당/공제를 수정할 수 없습니다.',
+        409,
+      );
     }
 
     const allowances = dto.allowances ?? (payroll.allowances as Record<string, number>);
@@ -86,7 +98,10 @@ export class PayrollService {
     if (payroll.status === 'PAID') {
       throw new AppException('PAYROLL_ALREADY_CONFIRMED', '이미 지급 완료된 급여입니다.', 409);
     }
-    return this.prisma.payroll.update({ where: { id }, data: { status: 'CONFIRMED', confirmedAt: new Date() } });
+    return this.prisma.payroll.update({
+      where: { id },
+      data: { status: 'CONFIRMED', confirmedAt: new Date() },
+    });
   }
 
   async pay(id: string) {
