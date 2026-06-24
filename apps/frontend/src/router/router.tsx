@@ -2,6 +2,8 @@ import { createBrowserRouter } from 'react-router-dom';
 import { ProtectedLayout } from '@/components/layout/protected-layout';
 import { ROUTES } from '@/config/routes';
 import { LoginPage } from '@/pages/login/login-page';
+import { SignupPage } from '@/pages/signup/signup-page';
+import { ChangePasswordPage } from '@/pages/change-password/change-password-page';
 import { DashboardPage } from '@/pages/dashboard/dashboard-page';
 import { AiAssistantPage } from '@/pages/ai-assistant/ai-assistant-page';
 import { EmployeesPage } from '@/pages/employees/employees-page';
@@ -26,6 +28,14 @@ export const router = createBrowserRouter([
   {
     path: ROUTES.login,
     element: <LoginPage />,
+  },
+  {
+    path: ROUTES.signup,
+    element: <SignupPage />,
+  },
+  {
+    path: ROUTES.changePassword,
+    element: <ChangePasswordPage />,
   },
   {
     element: <ProtectedLayout />,

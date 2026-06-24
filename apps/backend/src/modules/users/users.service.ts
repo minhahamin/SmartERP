@@ -74,7 +74,14 @@ export class UsersService {
     const passwordHash = await bcrypt.hash(temporaryPassword, 12);
 
     const user = await this.prisma.user.create({
-      data: { ...dto, companyId: company.id, employeeNo, passwordHash, hireDate: new Date(dto.hireDate) },
+      data: {
+        ...dto,
+        companyId: company.id,
+        employeeNo,
+        passwordHash,
+        hireDate: new Date(dto.hireDate),
+        mustChangePassword: true,
+      },
     });
     // 실제 운영에서는 초기 비밀번호 설정 링크를 이메일로 발송한다(docs/02 2.4) — 메일 발송은 범위 밖이라 임시 비밀번호를 그대로 반환
     return { ...user, temporaryPassword };

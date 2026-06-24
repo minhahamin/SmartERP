@@ -32,8 +32,8 @@ function Header() {
   const switchRole = useAuthStore((state) => state.switchRole);
   const setMobileSidebarOpen = useUIStore((state) => state.setMobileSidebarOpen);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate(ROUTES.login);
   };
 

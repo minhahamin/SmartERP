@@ -9,10 +9,15 @@ import { ROUTES } from '@/config/routes';
  */
 function ProtectedLayout() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const mustChangePassword = useAuthStore((state) => state.user?.mustChangePassword);
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to={ROUTES.login} replace state={{ from: location }} />;
+  }
+
+  if (mustChangePassword) {
+    return <Navigate to={ROUTES.changePassword} replace />;
   }
 
   return <AppLayout />;

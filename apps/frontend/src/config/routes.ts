@@ -3,6 +3,8 @@
  */
 export const ROUTES = {
   login: '/login',
+  signup: '/signup',
+  changePassword: '/change-password',
   dashboard: '/',
   aiAssistant: '/ai-assistant',
   employees: '/employees',

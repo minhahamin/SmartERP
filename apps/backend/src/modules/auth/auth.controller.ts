@@ -7,6 +7,8 @@ import { Public } from '../../common/decorators/public.decorator';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
 
@@ -23,6 +25,25 @@ export class AuthController {
     const result = await this.authService.login(body);
     this.setRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt);
     return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } }) // docs/12.6과 동일하게 분당 5회 제한
+  @Post('register')
+  @ApiOperation({ summary: '회사 최초 가입 (Tenant 생성 + ADMIN 계정 발급, docs/02 2.4)' })
+  async register(@Body() body: RegisterDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.register(body);
+    this.setRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt);
+    return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @Post('change-password')
+  @ApiOperation({ summary: '비밀번호 변경 (초대 가입자의 최초 비밀번호 변경 포함, docs/02 2.4)' })
+  async changePassword(@Body() body: ChangePasswordDto, @CurrentUser() user: AuthUser) {
+    await this.authService.changePassword(user.sub, body);
+    return { success: true };
   }
 
   @Public()
