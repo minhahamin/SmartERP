@@ -8,14 +8,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { EmployeeStatusBadge } from '@/pages/employees/components/employee-status-badge';
-import { DEPARTMENTS } from '@/mocks/departments';
-import { ROLE_LABEL } from '@/types/auth';
-import type { Employee } from '@/mocks/employees';
+import { roleLabel } from '@/types/auth';
+import type { Employee } from '@/pages/employees/api/employees-api';
 import { ROUTES } from '@/config/routes';
-
-function departmentName(departmentId: string) {
-  return DEPARTMENTS.find((d) => d.id === departmentId)?.name ?? '-';
-}
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -53,10 +48,10 @@ function EmployeeTable({ employees, onEdit, onDeactivate }: EmployeeTableProps) 
           >
             <td className="px-4 py-2.5 font-medium text-foreground">{employee.employeeNo}</td>
             <td className="px-4 py-2.5 text-foreground">{employee.name}</td>
-            <td className="px-4 py-2.5 text-muted-foreground">{departmentName(employee.departmentId)}</td>
-            <td className="px-4 py-2.5 text-muted-foreground">{employee.position}</td>
-            <td className="px-4 py-2.5 text-muted-foreground">{ROLE_LABEL[employee.role]}</td>
-            <td className="px-4 py-2.5 tabular-nums text-muted-foreground">{employee.hireDate}</td>
+            <td className="px-4 py-2.5 text-muted-foreground">{employee.department?.name ?? '-'}</td>
+            <td className="px-4 py-2.5 text-muted-foreground">{employee.position ?? '-'}</td>
+            <td className="px-4 py-2.5 text-muted-foreground">{roleLabel(employee.role.name)}</td>
+            <td className="px-4 py-2.5 tabular-nums text-muted-foreground">{employee.hireDate.slice(0, 10)}</td>
             <td className="px-4 py-2.5">
               <EmployeeStatusBadge status={employee.status} />
             </td>

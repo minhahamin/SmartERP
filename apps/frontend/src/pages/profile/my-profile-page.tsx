@@ -14,8 +14,7 @@ import { PayrollHistoryTable } from '@/components/common/payroll-history-table';
 import { LeaveSummary } from '@/components/common/leave-summary';
 import { useEmployee } from '@/pages/employees/hooks/use-employees';
 import { useAuthStore } from '@/stores/auth-store';
-import { DEPARTMENTS } from '@/mocks/departments';
-import { ROLE_LABEL } from '@/types/auth';
+import { roleLabel } from '@/types/auth';
 
 function MyProfilePage() {
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -31,7 +30,7 @@ function MyProfilePage() {
     );
   }
 
-  const departmentName = DEPARTMENTS.find((d) => d.id === employee.departmentId)?.name ?? '-';
+  const departmentName = employee.department?.name ?? '-';
 
   return (
     <div className="flex flex-col gap-4">
@@ -45,13 +44,13 @@ function MyProfilePage() {
           <div>
             <p className="text-base font-semibold text-foreground">{employee.name}</p>
             <p className="text-sm text-muted-foreground">
-              {departmentName} · {employee.position}
+              {departmentName} · {employee.position ?? '-'}
             </p>
           </div>
           <EmployeeStatusBadge status={employee.status} />
           <div className="mt-2 flex w-full flex-col gap-1.5 border-t border-border pt-3 text-left text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
-              <Phone className="size-3.5" /> {employee.phone}
+              <Phone className="size-3.5" /> {employee.phone ?? '-'}
             </span>
             <span className="flex items-center gap-1.5">
               <Mail className="size-3.5" /> {employee.email}
@@ -76,11 +75,11 @@ function MyProfilePage() {
                 <Field label="이름" value={employee.name} />
                 <Field label="사번" value={employee.employeeNo} />
                 <Field label="이메일" value={employee.email} />
-                <Field label="연락처" value={employee.phone} />
+                <Field label="연락처" value={employee.phone ?? '-'} />
                 <Field label="부서" value={departmentName} />
-                <Field label="직급" value={employee.position} />
-                <Field label="권한(Role)" value={ROLE_LABEL[employee.role]} />
-                <Field label="입사일" value={employee.hireDate} />
+                <Field label="직급" value={employee.position ?? '-'} />
+                <Field label="권한(Role)" value={roleLabel(employee.role.name)} />
+                <Field label="입사일" value={employee.hireDate.slice(0, 10)} />
               </dl>
               <p className="mt-4 text-xs text-muted-foreground">
                 이름·부서·직급·권한 등은 인사 담당자만 변경할 수 있습니다. 연락처/이메일은 우측 상단 "내 정보 수정"에서 직접 변경하세요.

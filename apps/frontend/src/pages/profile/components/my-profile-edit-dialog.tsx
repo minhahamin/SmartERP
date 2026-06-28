@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useUpdateEmployee } from '@/pages/employees/hooks/use-employees';
 import { useAuthStore } from '@/stores/auth-store';
-import type { Employee } from '@/mocks/employees';
+import type { Employee } from '@/pages/employees/api/employees-api';
 
 interface MyProfileEditDialogProps {
   open: boolean;
@@ -18,14 +18,14 @@ interface MyProfileEditDialogProps {
  * 근거: docs/02-users-and-permissions.md — EMPLOYEE는 본인 일부 항목만 수정 가능(R/own, U/own 일부).
  */
 function MyProfileEditDialog({ open, onOpenChange, employee }: MyProfileEditDialogProps) {
-  const [phone, setPhone] = useState(employee.phone);
+  const [phone, setPhone] = useState(employee.phone ?? '');
   const [email, setEmail] = useState(employee.email);
   const updateEmployee = useUpdateEmployee();
   const patchUser = useAuthStore((state) => state.patchUser);
 
   useEffect(() => {
     if (open) {
-      setPhone(employee.phone);
+      setPhone(employee.phone ?? '');
       setEmail(employee.email);
     }
   }, [open, employee]);

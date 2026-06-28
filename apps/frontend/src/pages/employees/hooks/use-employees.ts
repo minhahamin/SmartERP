@@ -3,7 +3,9 @@ import {
   createEmployee,
   deactivateEmployee,
   getEmployee,
+  listDepartmentOptions,
   listEmployees,
+  listRoleOptions,
   updateEmployee,
   type CreateEmployeeInput,
   type EmployeeListQuery,
@@ -26,6 +28,14 @@ export function useEmployee(id: string | undefined) {
     queryFn: () => getEmployee(id as string),
     enabled: Boolean(id),
   });
+}
+
+export function useDepartmentOptions() {
+  return useQuery({ queryKey: ['departments', 'options'], queryFn: listDepartmentOptions });
+}
+
+export function useRoleOptions() {
+  return useQuery({ queryKey: ['roles', 'options'], queryFn: listRoleOptions });
 }
 
 export function useCreateEmployee() {

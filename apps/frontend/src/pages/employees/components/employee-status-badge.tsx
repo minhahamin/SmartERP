@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import type { EmployeeStatus } from '@/mocks/employees';
+import type { EmployeeStatus } from '@/pages/employees/api/employees-api';
 
 const STATUS_CONFIG: Record<EmployeeStatus, { label: string; variant: 'success' | 'warning' | 'default' }> = {
   ACTIVE: { label: '재직중', variant: 'success' },

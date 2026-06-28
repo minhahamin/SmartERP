@@ -1,8 +1,8 @@
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DEPARTMENTS } from '@/mocks/departments';
-import type { EmployeeStatus } from '@/mocks/employees';
+import { useDepartmentOptions } from '@/pages/employees/hooks/use-employees';
+import type { EmployeeStatus } from '@/pages/employees/api/employees-api';
 
 interface EmployeeFiltersProps {
   search: string;
@@ -28,6 +28,8 @@ function EmployeeFilters({
   status,
   onStatusChange,
 }: EmployeeFiltersProps) {
+  const { data: departments } = useDepartmentOptions();
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative w-56">
@@ -45,7 +47,7 @@ function EmployeeFilters({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="ALL">전체 부서</SelectItem>
-          {DEPARTMENTS.map((d) => (
+          {departments?.map((d) => (
             <SelectItem key={d.id} value={d.id}>
               {d.name}
             </SelectItem>

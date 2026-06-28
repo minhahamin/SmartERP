@@ -18,3 +18,8 @@ export const ROLE_LABEL: Record<RoleName, string> = {
   SALES_MANAGER: '영업 담당자',
   EMPLOYEE: '일반 직원',
 };
+
+/** 권한 관리 화면에서 만든 커스텀 역할은 ROLE_LABEL에 없으므로 원래 이름을 그대로 보여준다 */
+export function roleLabel(roleName: string): string {
+  return ROLE_LABEL[roleName as RoleName] ?? roleName;
+}

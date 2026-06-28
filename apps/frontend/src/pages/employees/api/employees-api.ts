@@ -1,8 +1,31 @@
-import { EMPLOYEES, type Employee, type EmployeeStatus } from '@/mocks/employees';
-import type { RoleName } from '@/types/auth';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-let employeeDb: Employee[] = [...EMPLOYEES];
+export type EmployeeStatus = 'ACTIVE' | 'ON_LEAVE' | 'RESIGNED';
+
+export interface Employee {
+  id: string;
+  employeeNo: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  departmentId: string | null;
+  department: { id: string; name: string } | null;
+  roleId: string;
+  role: { id: string; name: string };
+  position: string | null;
+  hireDate: string;
+  status: EmployeeStatus;
+}
+
+export interface DepartmentOption {
+  id: string;
+  name: string;
+}
+
+export interface RoleOption {
+  id: string;
+  name: string;
+}
 
 export interface EmployeeListQuery {
   search?: string;
@@ -21,67 +44,56 @@ export interface EmployeeListResult {
 export interface CreateEmployeeInput {
   name: string;
   email: string;
-  phone: string;
-  departmentId: string;
-  role: RoleName;
-  position: string;
+  phone?: string;
+  departmentId?: string;
+  roleId: string;
+  position?: string;
   hireDate: string;
 }
 
-export type UpdateEmployeeInput = Partial<CreateEmployeeInput>;
+export type UpdateEmployeeInput = Partial<CreateEmployeeInput> & { status?: EmployeeStatus };
+
+/** 백엔드는 이메일 발송 없이 임시 비밀번호를 그대로 응답에 담아 반환한다(docs/02 2.4) — 관리자가 직접 전달해야 한다 */
+export interface CreatedEmployee extends Employee {
+  temporaryPassword: string;
+}
 
 export async function listEmployees(query: EmployeeListQuery): Promise<EmployeeListResult> {
-  await delay();
-  let items = [...employeeDb];
-
-  if (query.search) {
-    const keyword = query.search.trim().toLowerCase();
-    items = items.filter(
-      (e) => e.name.toLowerCase().includes(keyword) || e.employeeNo.toLowerCase().includes(keyword),
-    );
-  }
-  if (query.departmentId) {
-    items = items.filter((e) => e.departmentId === query.departmentId);
-  }
-  if (query.status) {
-    items = items.filter((e) => e.status === query.status);
-  }
-
-  const total = items.length;
-  const totalPages = Math.max(1, Math.ceil(total / query.limit));
-  const start = (query.page - 1) * query.limit;
-  const paged = items.slice(start, start + query.limit);
-
-  return { items: paged, total, totalPages };
-}
-
-export async function getEmployee(id: string): Promise<Employee | undefined> {
-  await delay(250);
-  return employeeDb.find((e) => e.id === id);
-}
-
-export async function createEmployee(input: CreateEmployeeInput): Promise<Employee> {
-  await delay(400);
-  const nextSeq = employeeDb.length + 1024;
-  const employee: Employee = {
-    id: `emp-${Date.now()}`,
-    employeeNo: `E-${nextSeq}`,
-    status: 'ACTIVE',
-    ...input,
+  const { data } = await apiClient.get<ApiSuccess<Employee[]>>('/users', { params: query });
+  return {
+    items: data.data,
+    total: data.meta?.total ?? data.data.length,
+    totalPages: data.meta?.totalPages ?? 1,
   };
-  employeeDb = [employee, ...employeeDb];
-  return employee;
+}
+
+export async function getEmployee(id: string): Promise<Employee> {
+  const { data } = await apiClient.get<ApiSuccess<Employee>>(`/users/${id}`);
+  return data.data;
+}
+
+export async function createEmployee(input: CreateEmployeeInput): Promise<CreatedEmployee> {
+  const { data } = await apiClient.post<ApiSuccess<CreatedEmployee>>('/users', input);
+  return data.data;
 }
 
 export async function updateEmployee(id: string, input: UpdateEmployeeInput): Promise<Employee> {
-  await delay(400);
-  employeeDb = employeeDb.map((e) => (e.id === id ? { ...e, ...input } : e));
-  const updated = employeeDb.find((e) => e.id === id);
-  if (!updated) throw new Error('직원을 찾을 수 없습니다.');
-  return updated;
+  const { data } = await apiClient.patch<ApiSuccess<Employee>>(`/users/${id}`, input);
+  return data.data;
 }
 
 export async function deactivateEmployee(id: string): Promise<void> {
-  await delay(400);
-  employeeDb = employeeDb.map((e) => (e.id === id ? { ...e, status: 'RESIGNED' as const } : e));
+  await apiClient.delete(`/users/${id}`);
+}
+
+/** 직원 등록/수정 폼의 부서 선택 옵션 — 부서 관리 화면(아직 mock)과는 무관하게 실데이터를 직접 조회한다 */
+export async function listDepartmentOptions(): Promise<DepartmentOption[]> {
+  const { data } = await apiClient.get<ApiSuccess<DepartmentOption[]>>('/departments');
+  return data.data;
+}
+
+/** 직원 등록/수정 폼의 권한(Role) 선택 옵션 */
+export async function listRoleOptions(): Promise<RoleOption[]> {
+  const { data } = await apiClient.get<ApiSuccess<RoleOption[]>>('/roles');
+  return data.data;
 }

@@ -10,7 +10,7 @@ import { EmployeeFilters } from '@/pages/employees/components/employee-filters';
 import { EmployeeTable } from '@/pages/employees/components/employee-table';
 import { EmployeeFormDialog } from '@/pages/employees/components/employee-form-dialog';
 import { useDeactivateEmployee, useEmployees } from '@/pages/employees/hooks/use-employees';
-import type { Employee, EmployeeStatus } from '@/mocks/employees';
+import type { Employee, EmployeeStatus } from '@/pages/employees/api/employees-api';
 
 const PAGE_SIZE = 8;
 
