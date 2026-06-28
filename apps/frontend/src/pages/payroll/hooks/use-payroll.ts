@@ -5,6 +5,7 @@ import {
   generateMonthlyPayroll,
   getMyPayroll,
   listPayroll,
+  listPayrollHistoryForUser,
   transitionPayrollStatus,
   updatePayrollItem,
 } from '@/pages/payroll/api/payroll-api';
@@ -19,11 +20,18 @@ export function usePayrollList(year: number, month: number) {
   });
 }
 
-export function useMyPayroll(employeeId: string | undefined) {
+export function useMyPayroll() {
   return useQuery({
-    queryKey: [...PAYROLL_KEY, 'me', employeeId],
-    queryFn: () => getMyPayroll(employeeId as string),
-    enabled: Boolean(employeeId),
+    queryKey: [...PAYROLL_KEY, 'me'],
+    queryFn: () => getMyPayroll(),
+  });
+}
+
+export function usePayrollHistory(userId: string | undefined) {
+  return useQuery({
+    queryKey: [...PAYROLL_KEY, 'history', userId],
+    queryFn: () => listPayrollHistoryForUser(userId as string),
+    enabled: Boolean(userId),
   });
 }
 

@@ -28,7 +28,17 @@ export class PayrollService {
     const [items, total] = await Promise.all([
       this.prisma.payroll.findMany({
         where,
-        include: { user: true },
+        // select로 한정 — passwordHash/refreshTokenHash 등 민감 필드가 응답에 새지 않도록 한다
+        include: {
+          user: {
+            select: {
+              id: true,
+              employeeNo: true,
+              name: true,
+              department: { select: { id: true, name: true } },
+            },
+          },
+        },
         orderBy: { user: { employeeNo: 'asc' } },
         skip: (query.page - 1) * query.limit,
         take: query.limit,

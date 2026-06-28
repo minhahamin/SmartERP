@@ -15,6 +15,8 @@ export interface Employee {
   position: string | null;
   hireDate: string;
   status: EmployeeStatus;
+  /** Prisma Decimal은 JSON으로 문자열화되어 내려온다 */
+  baseSalary: string | null;
 }
 
 export interface DepartmentOption {
@@ -49,6 +51,7 @@ export interface CreateEmployeeInput {
   roleId: string;
   position?: string;
   hireDate: string;
+  baseSalary?: number;
 }
 
 export type UpdateEmployeeInput = Partial<CreateEmployeeInput> & { status?: EmployeeStatus };

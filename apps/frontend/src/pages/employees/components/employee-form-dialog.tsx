@@ -38,6 +38,7 @@ const EMPTY_FORM = {
   roleId: '',
   position: '',
   hireDate: '',
+  baseSalary: '',
 };
 
 function EmployeeFormDialog({ open, onOpenChange, employee }: EmployeeFormDialogProps) {
@@ -62,6 +63,7 @@ function EmployeeFormDialog({ open, onOpenChange, employee }: EmployeeFormDialog
         roleId: employee.roleId,
         position: employee.position ?? '',
         hireDate: employee.hireDate.slice(0, 10),
+        baseSalary: employee.baseSalary ?? '',
       });
     } else {
       const defaultRoleId = roles?.find((r) => r.name === 'EMPLOYEE')?.id ?? roles?.[0]?.id ?? '';
@@ -82,6 +84,7 @@ function EmployeeFormDialog({ open, onOpenChange, employee }: EmployeeFormDialog
     roleId: form.roleId,
     position: form.position || undefined,
     hireDate: form.hireDate,
+    baseSalary: form.baseSalary ? Number(form.baseSalary) : undefined,
   });
 
   const handleSubmit = (event: FormEvent) => {
@@ -203,7 +206,7 @@ function EmployeeFormDialog({ open, onOpenChange, employee }: EmployeeFormDialog
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-2 flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 <Label htmlFor="emp-hire-date">입사일</Label>
                 <Input
                   id="emp-hire-date"
@@ -211,6 +214,17 @@ function EmployeeFormDialog({ open, onOpenChange, employee }: EmployeeFormDialog
                   required
                   value={form.hireDate}
                   onChange={(e) => setForm({ ...form, hireDate: e.target.value })}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="emp-base-salary">기본급</Label>
+                <Input
+                  id="emp-base-salary"
+                  type="number"
+                  min={0}
+                  placeholder="3000000"
+                  value={form.baseSalary}
+                  onChange={(e) => setForm({ ...form, baseSalary: e.target.value })}
                 />
               </div>
             </div>

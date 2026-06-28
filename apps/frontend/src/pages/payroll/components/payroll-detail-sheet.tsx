@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { X } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
-import { getEmployeeById } from '@/mocks/employees';
 import { useTransitionPayrollStatus, useUpdatePayrollItem } from '@/pages/payroll/hooks/use-payroll';
-import type { PayrollRecord } from '@/mocks/payroll';
+import type { PayrollRecord } from '@/pages/payroll/api/payroll-api';
 
 interface PayrollDetailSheetProps {
   record: PayrollRecord | null;
@@ -33,12 +33,22 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
 
   if (!record) return null;
 
-  const employee = getEmployeeById(record.employeeId);
   const netSalary = record.baseSalary + sum(allowances) - sum(deductions);
   const isDirty = JSON.stringify(allowances) !== JSON.stringify(record.allowances) || JSON.stringify(deductions) !== JSON.stringify(record.deductions);
 
   const handleSave = () => {
     updateItem.mutate({ id: record.id, allowances, deductions });
+  };
+
+  const removeKey = (set: typeof setAllowances, current: Record<string, number>, key: string) => {
+    const next = { ...current };
+    delete next[key];
+    set(next);
+  };
+
+  const addEntry = (set: typeof setAllowances, current: Record<string, number>, label: string, value: number) => {
+    if (!label.trim() || label in current) return;
+    set({ ...current, [label.trim()]: value });
   };
 
   return (
@@ -47,14 +57,18 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
         <SheetContent>
           <SheetHeader>
             <SheetTitle>
-              {employee?.name} · {record.payYear}년 {record.payMonth}월 급여
+              {record.user?.name ?? '내'} · {record.payYear}년 {record.payMonth}월 급여
             </SheetTitle>
           </SheetHeader>
 
           <div className="flex flex-col gap-4 overflow-y-auto px-5">
             <Row label="기본급" value={record.baseSalary} readOnly />
 
-            <Section title="수당">
+            <Section
+              title="수당"
+              readOnly={readOnly}
+              onAdd={(label, value) => addEntry(setAllowances, allowances, label, value)}
+            >
               {Object.entries(allowances).map(([key, value]) => (
                 <Row
                   key={key}
@@ -62,11 +76,16 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
                   value={value}
                   readOnly={readOnly}
                   onChange={(next) => setAllowances({ ...allowances, [key]: next })}
+                  onRemove={readOnly ? undefined : () => removeKey(setAllowances, allowances, key)}
                 />
               ))}
             </Section>
 
-            <Section title="공제">
+            <Section
+              title="공제"
+              readOnly={readOnly}
+              onAdd={(label, value) => addEntry(setDeductions, deductions, label, value)}
+            >
               {Object.entries(deductions).map(([key, value]) => (
                 <Row
                   key={key}
@@ -74,6 +93,7 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
                   value={value}
                   readOnly={readOnly}
                   onChange={(next) => setDeductions({ ...deductions, [key]: next })}
+                  onRemove={readOnly ? undefined : () => removeKey(setDeductions, deductions, key)}
                 />
               ))}
             </Section>
@@ -120,11 +140,51 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+  readOnly,
+  onAdd,
+}: {
+  title: string;
+  children: ReactNode;
+  readOnly?: boolean;
+  onAdd?: (label: string, value: number) => void;
+}) {
+  const [newLabel, setNewLabel] = useState('');
+  const [newValue, setNewValue] = useState('');
+
+  const handleAdd = () => {
+    if (!onAdd || !newLabel.trim()) return;
+    onAdd(newLabel, Number(newValue) || 0);
+    setNewLabel('');
+    setNewValue('');
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs font-medium text-muted-foreground">{title}</p>
       {children}
+      {!readOnly && onAdd && (
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="항목명"
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            className="h-8"
+          />
+          <Input
+            type="number"
+            placeholder="금액"
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            className="h-8 w-28 text-right tabular-nums"
+          />
+          <Button type="button" variant="secondary" size="sm" disabled={!newLabel.trim()} onClick={handleAdd}>
+            추가
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -134,11 +194,13 @@ function Row({
   value,
   readOnly,
   onChange,
+  onRemove,
 }: {
   label: string;
   value: number;
   readOnly?: boolean;
   onChange?: (value: number) => void;
+  onRemove?: () => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -146,12 +208,19 @@ function Row({
       {readOnly || !onChange ? (
         <span className="text-sm tabular-nums text-foreground">{value.toLocaleString()}</span>
       ) : (
-        <Input
-          type="number"
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value) || 0)}
-          className="w-32 text-right tabular-nums"
-        />
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="number"
+            value={value}
+            onChange={(e) => onChange(Number(e.target.value) || 0)}
+            className="w-32 text-right tabular-nums"
+          />
+          {onRemove && (
+            <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive">
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

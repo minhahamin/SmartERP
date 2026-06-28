@@ -1,7 +1,5 @@
-import { getEmployeeById } from '@/mocks/employees';
-import { DEPARTMENTS } from '@/mocks/departments';
 import { PayrollStatusBadge } from '@/pages/payroll/components/payroll-status-badge';
-import type { PayrollRecord } from '@/mocks/payroll';
+import type { PayrollRecord } from '@/pages/payroll/api/payroll-api';
 
 function sum(values: Record<string, number>) {
   return Object.values(values).reduce((a, b) => a + b, 0);
@@ -31,30 +29,26 @@ function PayrollTable({ records, onRowClick }: PayrollTableProps) {
         </tr>
       </thead>
       <tbody>
-        {records.map((record) => {
-          const employee = getEmployeeById(record.employeeId);
-          const departmentName = DEPARTMENTS.find((d) => d.id === employee?.departmentId)?.name ?? '-';
-          return (
-            <tr
-              key={record.id}
-              className="cursor-pointer border-b border-border last:border-0 hover:bg-gray-50"
-              onClick={() => onRowClick(record)}
-            >
-              <td className="px-4 py-2.5">
-                <span className="font-medium text-foreground">{employee?.employeeNo}</span>{' '}
-                <span className="text-muted-foreground">{employee?.name}</span>
-              </td>
-              <td className="px-4 py-2.5 text-muted-foreground">{departmentName}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{record.baseSalary.toLocaleString()}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{sum(record.allowances).toLocaleString()}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{sum(record.deductions).toLocaleString()}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">{record.netSalary.toLocaleString()}</td>
-              <td className="px-4 py-2.5">
-                <PayrollStatusBadge status={record.status} />
-              </td>
-            </tr>
-          );
-        })}
+        {records.map((record) => (
+          <tr
+            key={record.id}
+            className="cursor-pointer border-b border-border last:border-0 hover:bg-gray-50"
+            onClick={() => onRowClick(record)}
+          >
+            <td className="px-4 py-2.5">
+              <span className="font-medium text-foreground">{record.user?.employeeNo}</span>{' '}
+              <span className="text-muted-foreground">{record.user?.name}</span>
+            </td>
+            <td className="px-4 py-2.5 text-muted-foreground">{record.user?.department?.name ?? '-'}</td>
+            <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{record.baseSalary.toLocaleString()}</td>
+            <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{sum(record.allowances).toLocaleString()}</td>
+            <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{sum(record.deductions).toLocaleString()}</td>
+            <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">{record.netSalary.toLocaleString()}</td>
+            <td className="px-4 py-2.5">
+              <PayrollStatusBadge status={record.status} />
+            </td>
+          </tr>
+        ))}
       </tbody>
     </table>
   );

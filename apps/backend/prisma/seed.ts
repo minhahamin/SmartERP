@@ -17,11 +17,12 @@ const DEMO_USERS: {
   name: string;
   position: string;
   deptName: string;
+  baseSalary: number;
 }[] = [
-  { role: 'ADMIN', employeeNo: 'E-1000', email: 'doyoon.kim@erpilot.io', name: '김도윤', position: '대표', deptName: '경영지원팀' },
-  { role: 'HR_MANAGER', employeeNo: 'E-1042', email: 'yujin.choi@erpilot.io', name: '최유진', position: '과장', deptName: '인사팀' },
-  { role: 'SALES_MANAGER', employeeNo: 'E-1024', email: 'minjun.kim@erpilot.io', name: '김민준', position: '팀장', deptName: '영업1팀' },
-  { role: 'EMPLOYEE', employeeNo: 'E-1031', email: 'jihoon.park@erpilot.io', name: '박지훈', position: '사원', deptName: '생산1팀' },
+  { role: 'ADMIN', employeeNo: 'E-1000', email: 'doyoon.kim@erpilot.io', name: '김도윤', position: '대표', deptName: '경영지원팀', baseSalary: 8_000_000 },
+  { role: 'HR_MANAGER', employeeNo: 'E-1042', email: 'yujin.choi@erpilot.io', name: '최유진', position: '과장', deptName: '인사팀', baseSalary: 3_000_000 },
+  { role: 'SALES_MANAGER', employeeNo: 'E-1024', email: 'minjun.kim@erpilot.io', name: '김민준', position: '팀장', deptName: '영업1팀', baseSalary: 3_200_000 },
+  { role: 'EMPLOYEE', employeeNo: 'E-1031', email: 'jihoon.park@erpilot.io', name: '박지훈', position: '사원', deptName: '생산1팀', baseSalary: 2_800_000 },
 ];
 
 const DEMO_PASSWORD = 'erpilot1234!';
@@ -57,6 +58,7 @@ async function main() {
         hireDate: new Date(),
         departmentId: departmentsByName.get(demo.deptName),
         roleId: roleIdByName[demo.role],
+        baseSalary: demo.baseSalary,
       },
     });
   }

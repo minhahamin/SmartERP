@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import type { PayrollStatus } from '@/mocks/payroll';
+import type { PayrollStatus } from '@/pages/payroll/api/payroll-api';
 
 const CONFIG: Record<PayrollStatus, { label: string; variant: 'default' | 'info' | 'success' }> = {
   DRAFT: { label: 'DRAFT', variant: 'default' },

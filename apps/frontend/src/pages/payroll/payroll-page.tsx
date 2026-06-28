@@ -19,7 +19,7 @@ import {
 } from '@/pages/payroll/hooks/use-payroll';
 import { useAuthStore } from '@/stores/auth-store';
 import { Wallet } from 'lucide-react';
-import type { PayrollRecord } from '@/mocks/payroll';
+import type { PayrollRecord } from '@/pages/payroll/api/payroll-api';
 
 const MONTH_OPTIONS = [
   { year: 2026, month: 4, label: '2026년 04월' },
@@ -143,8 +143,7 @@ function PayrollManagementView() {
 }
 
 function MyPayrollView() {
-  const user = useAuthStore((state) => state.user);
-  const { data: records, isLoading } = useMyPayroll(user?.id);
+  const { data: records, isLoading } = useMyPayroll();
   const [selected, setSelected] = useState<PayrollRecord | null>(null);
 
   return (

@@ -1,16 +1,30 @@
 import { UserX } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/common/empty-state';
-import { PAYROLL_SEED, type PayrollStatus } from '@/mocks/payroll';
+import { Skeleton } from '@/components/ui/skeleton';
+import { usePayrollHistory } from '@/pages/payroll/hooks/use-payroll';
+import type { PayrollStatus } from '@/pages/payroll/api/payroll-api';
 
 const PAYROLL_STATUS_LABEL: Record<PayrollStatus, string> = { DRAFT: 'DRAFT', CONFIRMED: 'CONFIRMED', PAID: 'PAID' };
 
 function PayrollHistoryTable({ employeeId }: { employeeId: string }) {
-  const payrolls = PAYROLL_SEED.filter((p) => p.employeeId === employeeId).sort((a, b) => b.payMonth - a.payMonth);
+  const { data: payrolls, isLoading } = usePayrollHistory(employeeId);
 
-  if (payrolls.length === 0) {
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-9" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!payrolls || payrolls.length === 0) {
     return <EmptyState icon={UserX} title="급여 이력이 없습니다" />;
   }
+
+  const sorted = [...payrolls].sort((a, b) => b.payYear * 12 + b.payMonth - (a.payYear * 12 + a.payMonth));
 
   return (
     <table className="w-full text-sm">
@@ -23,7 +37,7 @@ function PayrollHistoryTable({ employeeId }: { employeeId: string }) {
         </tr>
       </thead>
       <tbody>
-        {payrolls.map((p) => (
+        {sorted.map((p) => (
           <tr key={p.id} className="border-b border-border last:border-0">
             <td className="py-2 tabular-nums">
               {p.payYear}년 {p.payMonth}월

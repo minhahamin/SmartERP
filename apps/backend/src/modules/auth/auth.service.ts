@@ -37,6 +37,8 @@ export class AuthService {
     return this.prisma.user.findFirst({
       where: { email, status: 'ACTIVE', ...(companyId ? { companyId } : {}) },
       include: { role: true, department: true },
+      // 로그인 비밀번호 검증과 issueTokens()의 리프레시 토큰 회전에 실제로 필요해 되살린다
+      omit: { passwordHash: false, refreshTokenHash: false },
     });
   }
 
@@ -81,7 +83,10 @@ export class AuthService {
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      omit: { passwordHash: false },
+    });
     const passwordMatches = await bcrypt.compare(dto.currentPassword, user.passwordHash);
     // 401이 아닌 400을 쓴다 — 인증(토큰)은 유효하므로, 프론트엔드 axios 인터셉터가 이를
     // "토큰 만료"로 오인해 /auth/refresh 재시도 후 세션을 끊어버리는 것을 방지한다.
@@ -106,6 +111,8 @@ export class AuthService {
     const user = await this.prisma.user.findFirst({
       where: { refreshTokenHash: tokenHash },
       include: { role: true, department: true },
+      // issueTokens()의 리프레시 토큰 회전(previousRefreshTokenHash 기록)에 필요해 되살린다
+      omit: { refreshTokenHash: false },
     });
     if (user) {
       if (!user.refreshTokenExpiresAt || user.refreshTokenExpiresAt < new Date()) {
