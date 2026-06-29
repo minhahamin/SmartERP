@@ -6,7 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCreateSchedule, useUpdateSchedule } from '@/pages/schedule/hooks/use-schedule';
 import { useAuthStore } from '@/stores/auth-store';
-import { SCHEDULE_TYPE_LABEL, type ScheduleEvent, type ScheduleType, type ScheduleVisibility } from '@/mocks/schedules';
+import {
+  SCHEDULE_TYPE_LABEL,
+  type ScheduleEvent,
+  type ScheduleType,
+  type ScheduleVisibility,
+} from '@/pages/schedule/api/schedule-api';
 
 interface ScheduleFormDialogProps {
   open: boolean;

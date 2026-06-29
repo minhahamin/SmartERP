@@ -52,6 +52,9 @@ export class ScheduleService {
         endAt: new Date(dto.endAt),
         companyId: requester.companyId,
         ownerId: requester.sub,
+        // 프론트엔드에 부서 선택 UI가 없으므로 작성자 소속 부서로 채운다 —
+        // 그래야 visibility=DEPARTMENT 일정이 findAll()의 부서 필터에 실제로 걸린다
+        departmentId: dto.departmentId ?? requester.departmentId,
       },
     });
   }

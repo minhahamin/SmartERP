@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { CalendarGrid } from '@/pages/schedule/components/calendar-grid';
 import { ScheduleFormDialog } from '@/pages/schedule/components/schedule-form-dialog';
 import { useDeleteSchedule, useSchedulesByMonth } from '@/pages/schedule/hooks/use-schedule';
-import type { ScheduleEvent } from '@/mocks/schedules';
+import type { ScheduleEvent } from '@/pages/schedule/api/schedule-api';
 
 const LEGEND: { label: string; className: string }[] = [
   { label: '회의', className: 'bg-info' },
@@ -17,9 +17,11 @@ const LEGEND: { label: string; className: string }[] = [
   { label: '기타', className: 'bg-gray-400' },
 ];
 
+const now = new Date();
+
 function SchedulePage() {
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(6);
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
   const [formOpen, setFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<ScheduleEvent | null>(null);
@@ -56,8 +58,8 @@ function SchedulePage() {
             variant="secondary"
             size="sm"
             onClick={() => {
-              setYear(2026);
-              setMonth(6);
+              setYear(now.getFullYear());
+              setMonth(now.getMonth() + 1);
             }}
           >
             오늘

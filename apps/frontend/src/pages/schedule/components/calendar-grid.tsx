@@ -3,7 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuthStore } from '@/stores/auth-store';
-import { SCHEDULE_TYPE_LABEL, type ScheduleEvent } from '@/mocks/schedules';
+import { SCHEDULE_TYPE_LABEL, type ScheduleEvent } from '@/pages/schedule/api/schedule-api';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -13,8 +13,6 @@ const TYPE_DOT_CLASS: Record<ScheduleEvent['type'], string> = {
   BUSINESS_TRIP: 'bg-warning text-white',
   ETC: 'bg-gray-400 text-white',
 };
-
-const today = new Date('2026-06-19');
 
 interface CalendarGridProps {
   year: number;
@@ -29,6 +27,7 @@ function CalendarGrid({ year, month, events, onEdit, onDelete }: CalendarGridPro
   /** docs/02 권한 매트릭스: ADMIN/HR_MANAGER는 전체 일정 CRUD, 그 외 역할은 본인이 등록한 일정만 수정/삭제 가능 */
   const canManage = (event: ScheduleEvent) => user?.role === 'ADMIN' || user?.role === 'HR_MANAGER' || event.ownerId === user?.id;
 
+  const today = new Date();
   const monthStart = startOfMonth(new Date(year, month - 1, 1));
   const monthEnd = endOfMonth(monthStart);
   const gridStart = startOfWeek(monthStart);
