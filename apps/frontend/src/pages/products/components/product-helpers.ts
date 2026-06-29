@@ -1,5 +1,6 @@
-import { INVENTORY } from '@/mocks/products';
+import type { InventoryRow } from '@/pages/products/api/products-api';
 
-export function getTotalStock(productId: string): number {
-  return INVENTORY.filter((i) => i.productId === productId).reduce((sum, i) => sum + i.quantity, 0);
+export function getTotalStock(rows: InventoryRow[] | undefined, productId: string): number {
+  if (!rows) return 0;
+  return rows.filter((r) => r.productId === productId).reduce((sum, r) => sum + r.quantity, 0);
 }

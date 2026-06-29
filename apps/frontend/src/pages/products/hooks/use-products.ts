@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createProduct,
   getProduct,
+  listInventoryRows,
   listProducts,
-  toggleProductActive,
+  setProductActive,
   updateProduct,
+  uploadProductImage,
   type ProductInput,
   type ProductListQuery,
 } from '@/pages/products/api/products-api';
@@ -22,6 +24,10 @@ export function useProduct(id: string | undefined) {
     queryFn: () => getProduct(id as string),
     enabled: Boolean(id),
   });
+}
+
+export function useInventoryRows() {
+  return useQuery({ queryKey: ['inventory', 'rows'], queryFn: listInventoryRows });
 }
 
 export function useCreateProduct() {
@@ -46,10 +52,20 @@ export function useUpdateProduct() {
   });
 }
 
-export function useToggleProductActive() {
+export function useUploadProductImage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => toggleProductActive(id),
+    mutationFn: ({ id, file }: { id: string; file: File }) => uploadProductImage(id, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+  });
+}
+
+export function useSetProductActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setProductActive(id, isActive),
     onSuccess: (product) => {
       queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
       toast({ title: product.isActive ? '제품이 다시 활성화되었습니다.' : '제품이 단종 처리되었습니다.', variant: 'success' });

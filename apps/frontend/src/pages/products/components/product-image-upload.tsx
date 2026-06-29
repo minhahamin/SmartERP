@@ -3,22 +3,13 @@ import { ImagePlus, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 
 interface ProductImageUploadProps {
+  /** 표시할 미리보기 URL(새로 고른 파일의 blob URL 또는 기존 저장된 이미지의 절대 URL) — 부모가 관리한다 */
   value?: string;
-  onChange: (url: string | undefined) => void;
+  onChange: (file: File | undefined) => void;
 }
 
-/**
- * 실제 백엔드(S3 등)가 없는 상태에서 이미지를 "업로드"한 것처럼 보여주기 위해
- * 선택한 파일을 URL.createObjectURL로 로컬 미리보기 URL로 변환한다.
- * 새로고침하면 사라지는 임시 URL이라는 한계는 있지만, 폼/목록/상세 화면에서
- * 실제 업로드 플로우(클릭 → 파일 선택 → 즉시 미리보기 → 제거)를 동일하게 시연할 수 있다.
- */
 function ProductImageUpload({ value, onChange }: ProductImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleFile = (file: File) => {
-    onChange(URL.createObjectURL(file));
-  };
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -59,7 +50,7 @@ function ProductImageUpload({ value, onChange }: ProductImageUploadProps) {
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) handleFile(file);
+          if (file) onChange(file);
           event.target.value = '';
         }}
       />

@@ -1,22 +1,17 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Package, Pencil, PowerOff } from 'lucide-react';
+import { ArrowLeft, Package, Pencil, PowerOff, Truck } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/common/empty-state';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { ProductFormDialog } from '@/pages/products/components/product-form-dialog';
-import { useProduct, useToggleProductActive } from '@/pages/products/hooks/use-products';
-import { getInventorySnapshot } from '@/mocks/inventory-store';
-import { getWarehouseById } from '@/mocks/warehouse-store';
-import { STOCK_MOVEMENTS } from '@/mocks/stock-movements';
-import { PRODUCTION_ORDERS } from '@/mocks/production-orders';
+import { useInventoryRows, useProduct, useSetProductActive } from '@/pages/products/hooks/use-products';
+import { toAbsoluteImageUrl } from '@/pages/products/api/products-api';
 import { ROUTES } from '@/config/routes';
-
-const MOVEMENT_TYPE_LABEL: Record<string, string> = { IN: '입고', OUT: '출고', ADJUST: '조정', TRANSFER: '이동' };
-const PRODUCTION_STATUS_LABEL: Record<string, string> = { PLANNED: '계획', IN_PROGRESS: '진행중', DELAYED: '지연', COMPLETED: '완료', CANCELLED: '취소' };
 
 function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,7 +19,8 @@ function ProductDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [toggleConfirmOpen, setToggleConfirmOpen] = useState(false);
   const { data: product, isLoading } = useProduct(id);
-  const toggleActive = useToggleProductActive();
+  const { data: inventoryRows } = useInventoryRows();
+  const setProductActive = useSetProductActive();
 
   if (isLoading || !product) {
     return (
@@ -35,9 +31,7 @@ function ProductDetailPage() {
     );
   }
 
-  const inventory = getInventorySnapshot().filter((i) => i.productId === product.id);
-  const movements = STOCK_MOVEMENTS.filter((m) => m.productId === product.id).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  const productionOrders = PRODUCTION_ORDERS.filter((p) => p.productId === product.id);
+  const inventory = inventoryRows?.filter((r) => r.productId === product.id) ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -53,7 +47,7 @@ function ProductDetailPage() {
         <Card className="flex flex-col items-center gap-3 p-6 text-center">
           <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-md bg-gray-50 text-muted-foreground">
             {product.imageUrl ? (
-              <img src={product.imageUrl} alt={product.name} className="size-full object-cover" />
+              <img src={toAbsoluteImageUrl(product.imageUrl)} alt={product.name} className="size-full object-cover" />
             ) : (
               <Package className="size-10" />
             )}
@@ -64,7 +58,7 @@ function ProductDetailPage() {
           </div>
           <Badge variant={product.isActive ? 'success' : 'default'}>{product.isActive ? '활성' : '단종'}</Badge>
           <div className="mt-2 flex w-full flex-col gap-1.5 border-t border-border pt-3 text-left text-xs text-muted-foreground">
-            <span>분류: {product.category}</span>
+            <span>분류: {product.category ?? '-'}</span>
             <span>단위: {product.unit}</span>
             <span>판매가: {product.salePrice.toLocaleString()}원</span>
             <span>원가: {product.costPrice.toLocaleString()}원</span>
@@ -89,86 +83,45 @@ function ProductDetailPage() {
             </TabsList>
 
             <TabsContent value="inventory" className="px-5 py-5">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="py-2">창고</th>
-                    <th className="py-2 text-right">현재고</th>
-                    <th className="py-2 text-right">안전재고</th>
-                    <th className="py-2">상태</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inventory.map((inv) => {
-                    const warehouse = getWarehouseById(inv.warehouseId);
-                    const low = inv.quantity < product.safetyStock;
-                    return (
-                      <tr key={inv.warehouseId} className="border-b border-border last:border-0">
-                        <td className="py-2">{warehouse?.name}</td>
-                        <td className={`py-2 text-right tabular-nums font-medium ${low ? 'text-red-600' : 'text-foreground'}`}>{inv.quantity}</td>
-                        <td className="py-2 text-right tabular-nums text-muted-foreground">{product.safetyStock}</td>
-                        <td className="py-2">
-                          <Badge variant={low ? 'danger' : 'success'}>{low ? '부족' : '정상'}</Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              {inventory.length === 0 ? (
+                <EmptyState icon={Package} title="등록된 재고가 없습니다" />
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="py-2">창고</th>
+                      <th className="py-2 text-right">현재고</th>
+                      <th className="py-2 text-right">안전재고</th>
+                      <th className="py-2">상태</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventory.map((inv) => {
+                      const low = inv.quantity < product.safetyStock;
+                      return (
+                        <tr key={inv.warehouseId} className="border-b border-border last:border-0">
+                          <td className="py-2">{inv.warehouseName}</td>
+                          <td className={`py-2 text-right tabular-nums font-medium ${low ? 'text-red-600' : 'text-foreground'}`}>{inv.quantity}</td>
+                          <td className="py-2 text-right tabular-nums text-muted-foreground">{product.safetyStock}</td>
+                          <td className="py-2">
+                            <Badge variant={low ? 'danger' : 'success'}>{low ? '부족' : '정상'}</Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </TabsContent>
 
             <TabsContent value="movements" className="px-5 py-5">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="py-2">일시</th>
-                    <th className="py-2">유형</th>
-                    <th className="py-2 text-right">수량</th>
-                    <th className="py-2">사유</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {movements.map((m) => (
-                    <tr key={m.id} className="border-b border-border last:border-0">
-                      <td className="py-2 tabular-nums text-muted-foreground">{m.createdAt.slice(0, 16).replace('T', ' ')}</td>
-                      <td className="py-2">
-                        <Badge variant={m.type === 'IN' ? 'success' : m.type === 'OUT' ? 'danger' : 'default'}>{MOVEMENT_TYPE_LABEL[m.type]}</Badge>
-                      </td>
-                      <td className={`py-2 text-right tabular-nums font-medium ${m.type === 'OUT' ? 'text-red-600' : 'text-success-foreground'}`}>
-                        {m.type === 'OUT' ? '-' : '+'}{Math.abs(m.quantity)}
-                      </td>
-                      <td className="py-2 text-muted-foreground">{m.memo}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {/* 입출고관리(StockMovements) 모듈은 별도로 연결 필요 — 오늘 범위 밖 */}
+              <EmptyState icon={Truck} title="입출고 이력이 없습니다" />
             </TabsContent>
 
             <TabsContent value="production" className="px-5 py-5">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="py-2">오더번호</th>
-                    <th className="py-2 text-right">계획/생산</th>
-                    <th className="py-2">마감일</th>
-                    <th className="py-2">상태</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {productionOrders.map((po) => (
-                    <tr key={po.id} className="border-b border-border last:border-0">
-                      <td className="py-2 font-medium text-foreground">{po.orderNo}</td>
-                      <td className="py-2 text-right tabular-nums text-muted-foreground">{po.producedQty}/{po.plannedQty}</td>
-                      <td className="py-2 tabular-nums text-muted-foreground">{po.dueDate}</td>
-                      <td className="py-2">
-                        <Badge variant={po.status === 'DELAYED' ? 'danger' : po.status === 'COMPLETED' ? 'success' : 'info'}>
-                          {PRODUCTION_STATUS_LABEL[po.status]}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {/* 생산관리(Production) 모듈은 별도로 연결 필요 — 오늘 범위 밖 */}
+              <EmptyState icon={Package} title="생산 이력이 없습니다" />
             </TabsContent>
           </Tabs>
         </Card>
@@ -182,8 +135,13 @@ function ProductDetailPage() {
         title={product.isActive ? '제품을 단종 처리할까요?' : '제품을 다시 활성화할까요?'}
         variant={product.isActive ? 'danger' : 'primary'}
         confirmLabel={product.isActive ? '단종 처리' : '활성화'}
-        loading={toggleActive.isPending}
-        onConfirm={() => toggleActive.mutate(product.id, { onSuccess: () => setToggleConfirmOpen(false) })}
+        loading={setProductActive.isPending}
+        onConfirm={() =>
+          setProductActive.mutate(
+            { id: product.id, isActive: !product.isActive },
+            { onSuccess: () => setToggleConfirmOpen(false) },
+          )
+        }
       />
     </div>
   );

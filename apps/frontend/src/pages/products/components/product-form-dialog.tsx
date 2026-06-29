@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ProductImageUpload } from '@/pages/products/components/product-image-upload';
-import { useCreateProduct, useUpdateProduct } from '@/pages/products/hooks/use-products';
-import type { Product } from '@/mocks/products';
+import { useCreateProduct, useUpdateProduct, useUploadProductImage } from '@/pages/products/hooks/use-products';
+import { toAbsoluteImageUrl, type Product } from '@/pages/products/api/products-api';
 
 interface ProductFormDialogProps {
   open: boolean;
@@ -21,53 +21,63 @@ const EMPTY_FORM = {
   salePrice: 0,
   costPrice: 0,
   safetyStock: 0,
-  imageUrl: undefined as string | undefined,
 };
 
 function ProductFormDialog({ open, onOpenChange, product }: ProductFormDialogProps) {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [imageFile, setImageFile] = useState<File | undefined>(undefined);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | undefined>(undefined);
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
+  const uploadImage = useUploadProductImage();
   const isEdit = Boolean(product);
-  const isSubmitting = createProduct.isPending || updateProduct.isPending;
+  const isSubmitting = createProduct.isPending || updateProduct.isPending || uploadImage.isPending;
 
   useEffect(() => {
-    if (open) {
-      setForm(
-        product
-          ? {
-              sku: product.sku,
-              name: product.name,
-              category: product.category,
-              unit: product.unit,
-              salePrice: product.salePrice,
-              costPrice: product.costPrice,
-              safetyStock: product.safetyStock,
-              imageUrl: product.imageUrl,
-            }
-          : EMPTY_FORM,
-      );
+    if (!open) return;
+    setImageFile(undefined);
+    if (product) {
+      setForm({
+        sku: product.sku,
+        name: product.name,
+        category: product.category ?? '',
+        unit: product.unit,
+        salePrice: product.salePrice,
+        costPrice: product.costPrice,
+        safetyStock: product.safetyStock,
+      });
+      setImagePreviewUrl(toAbsoluteImageUrl(product.imageUrl));
+    } else {
+      setForm(EMPTY_FORM);
+      setImagePreviewUrl(undefined);
     }
   }, [open, product]);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleImageChange = (file: File | undefined) => {
+    setImageFile(file);
+    setImagePreviewUrl(file ? URL.createObjectURL(file) : undefined);
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (isEdit && product) {
-      updateProduct.mutate({ id: product.id, input: form }, { onSuccess: () => onOpenChange(false) });
-    } else {
-      createProduct.mutate(form, { onSuccess: () => onOpenChange(false) });
+    const saved = isEdit && product
+      ? await updateProduct.mutateAsync({ id: product.id, input: form })
+      : await createProduct.mutateAsync(form);
+    if (imageFile) {
+      await uploadImage.mutateAsync({ id: saved.id, file: imageFile });
     }
+    onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(event) => void handleSubmit(event)}>
           <DialogHeader>
             <DialogTitle>{isEdit ? '제품 정보 수정' : '제품 등록'}</DialogTitle>
           </DialogHeader>
           <DialogBody>
-            <ProductImageUpload value={form.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
+            <ProductImageUpload value={imagePreviewUrl} onChange={handleImageChange} />
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="product-name">제품명</Label>

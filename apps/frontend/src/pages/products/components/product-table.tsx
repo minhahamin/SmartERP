@@ -3,11 +3,13 @@ import { Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tag } from '@/components/ui/tag';
 import { getTotalStock } from '@/pages/products/components/product-helpers';
+import { useInventoryRows } from '@/pages/products/hooks/use-products';
 import { ROUTES } from '@/config/routes';
-import type { Product } from '@/mocks/products';
+import { toAbsoluteImageUrl, type Product } from '@/pages/products/api/products-api';
 
 function ProductTable({ products }: { products: Product[] }) {
   const navigate = useNavigate();
+  const { data: inventoryRows } = useInventoryRows();
 
   if (products.length === 0) {
     return <p className="py-16 text-center text-sm text-muted-foreground">검색 결과가 없습니다.</p>;
@@ -27,7 +29,7 @@ function ProductTable({ products }: { products: Product[] }) {
       </thead>
       <tbody>
         {products.map((product) => {
-          const stock = getTotalStock(product.id);
+          const stock = getTotalStock(inventoryRows, product.id);
           const low = stock < product.safetyStock;
           return (
             <tr
@@ -40,7 +42,7 @@ function ProductTable({ products }: { products: Product[] }) {
                 <div className="flex items-center gap-2.5">
                   <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-100 text-muted-foreground">
                     {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="size-full object-cover" />
+                      <img src={toAbsoluteImageUrl(product.imageUrl)} alt={product.name} className="size-full object-cover" />
                     ) : (
                       <Package className="size-4" />
                     )}
@@ -49,7 +51,7 @@ function ProductTable({ products }: { products: Product[] }) {
                 </div>
               </td>
               <td className="px-4 py-2.5">
-                <Tag>{product.category}</Tag>
+                <Tag>{product.category ?? '-'}</Tag>
               </td>
               <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{product.salePrice.toLocaleString()}</td>
               <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${low ? 'text-red-600' : 'text-foreground'}`}>{stock}</td>

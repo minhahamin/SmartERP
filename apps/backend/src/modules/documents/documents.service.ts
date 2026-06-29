@@ -95,7 +95,9 @@ export class DocumentsService {
 
   private async saveFile(file: Express.Multer.File): Promise<string> {
     await mkdir(UPLOAD_DIR, { recursive: true });
-    const fileName = `${randomUUID()}-${file.originalname}`;
+    // multer는 multipart 파일명을 latin1로 디코딩한다 — 비ASCII 원본 파일명은 utf8로 다시 해석해야 한다.
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const fileName = `${randomUUID()}-${originalName}`;
     await writeFile(join(UPLOAD_DIR, fileName), file.buffer);
     return `/uploads/documents/${fileName}`;
   }

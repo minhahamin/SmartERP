@@ -1,5 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { memoryStorage } from 'multer';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
@@ -47,5 +61,30 @@ export class ProductsController {
   @ApiOperation({ summary: '제품 삭제' })
   remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.productsService.remove(id, user);
+  }
+
+  @Post(':id/image')
+  @RequirePermissions('PRODUCT', 'UPDATE')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: '제품 이미지 업로드' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, callback) => {
+        if (!file.mimetype.startsWith('image/')) {
+          callback(new BadRequestException('이미지 파일만 업로드할 수 있습니다.'), false);
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  uploadImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.productsService.uploadImage(id, file, user);
   }
 }
