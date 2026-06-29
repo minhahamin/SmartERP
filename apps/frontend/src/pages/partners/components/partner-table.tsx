@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Tag } from '@/components/ui/tag';
-import { getEmployeeById } from '@/mocks/employees';
-import type { Partner } from '@/mocks/partners';
+import { useEmployees } from '@/pages/employees/hooks/use-employees';
+import type { Partner } from '@/pages/partners/api/partners-api';
 
 const TYPE_LABEL: Record<Partner['type'], string> = { CUSTOMER: '고객사', VENDOR: '공급사', BOTH: '고객/공급' };
 const TYPE_VARIANT: Record<Partner['type'], 'info' | 'warning' | 'default'> = { CUSTOMER: 'info', VENDOR: 'warning', BOTH: 'default' };
@@ -12,6 +12,9 @@ interface PartnerTableProps {
 }
 
 function PartnerTable({ partners, onRowClick }: PartnerTableProps) {
+  const { data: employees } = useEmployees({ status: 'ACTIVE', page: 1, limit: 100 });
+  const managerName = (managerId: string | null) => employees?.items.find((e) => e.id === managerId)?.name ?? '-';
+
   if (partners.length === 0) {
     return <p className="py-16 text-center text-sm text-muted-foreground">검색 결과가 없습니다.</p>;
   }
@@ -24,7 +27,6 @@ function PartnerTable({ partners, onRowClick }: PartnerTableProps) {
           <th className="px-4 py-2.5">유형</th>
           <th className="px-4 py-2.5">담당자</th>
           <th className="px-4 py-2.5">등급</th>
-          <th className="px-4 py-2.5">최근 거래일</th>
         </tr>
       </thead>
       <tbody>
@@ -34,11 +36,10 @@ function PartnerTable({ partners, onRowClick }: PartnerTableProps) {
             <td className="px-4 py-2.5">
               <Badge variant={TYPE_VARIANT[partner.type]}>{TYPE_LABEL[partner.type]}</Badge>
             </td>
-            <td className="px-4 py-2.5 text-muted-foreground">{getEmployeeById(partner.managerId)?.name ?? '-'}</td>
+            <td className="px-4 py-2.5 text-muted-foreground">{managerName(partner.managerId)}</td>
             <td className="px-4 py-2.5">
               <Tag>{partner.grade}등급</Tag>
             </td>
-            <td className="px-4 py-2.5 tabular-nums text-muted-foreground">{partner.lastOrderDate}</td>
           </tr>
         ))}
       </tbody>

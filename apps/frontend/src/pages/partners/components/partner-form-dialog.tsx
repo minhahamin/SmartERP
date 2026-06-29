@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCreatePartner, useUpdatePartner } from '@/pages/partners/hooks/use-partners';
-import { EMPLOYEES } from '@/mocks/employees';
-import type { Partner, PartnerGrade, PartnerType } from '@/mocks/partners';
+import { useEmployees } from '@/pages/employees/hooks/use-employees';
+import type { Partner, PartnerGrade, PartnerType } from '@/pages/partners/api/partners-api';
 
 interface PartnerFormDialogProps {
   open: boolean;
@@ -23,37 +23,37 @@ const EMPTY_FORM = {
   email: '',
   address: '',
   grade: 'B' as PartnerGrade,
-  managerId: EMPLOYEES[0].id,
+  managerId: '',
 };
-
-const salesManagers = EMPLOYEES.filter((e) => e.status === 'ACTIVE');
 
 function PartnerFormDialog({ open, onOpenChange, partner }: PartnerFormDialogProps) {
   const [form, setForm] = useState(EMPTY_FORM);
+  const { data: employeeResult } = useEmployees({ status: 'ACTIVE', page: 1, limit: 100 });
+  const salesManagers = employeeResult?.items ?? [];
+  const defaultManagerId = salesManagers[0]?.id ?? '';
   const createPartner = useCreatePartner();
   const updatePartner = useUpdatePartner();
   const isEdit = Boolean(partner);
   const isSubmitting = createPartner.isPending || updatePartner.isPending;
 
   useEffect(() => {
-    if (open) {
-      setForm(
-        partner
-          ? {
-              name: partner.name,
-              bizRegNo: partner.bizRegNo,
-              type: partner.type,
-              ceoName: partner.ceoName,
-              phone: partner.phone,
-              email: partner.email,
-              address: partner.address,
-              grade: partner.grade,
-              managerId: partner.managerId,
-            }
-          : EMPTY_FORM,
-      );
+    if (!open) return;
+    if (partner) {
+      setForm({
+        name: partner.name,
+        bizRegNo: partner.bizRegNo,
+        type: partner.type,
+        ceoName: partner.ceoName ?? '',
+        phone: partner.phone ?? '',
+        email: partner.email ?? '',
+        address: partner.address ?? '',
+        grade: partner.grade,
+        managerId: partner.managerId ?? '',
+      });
+    } else {
+      setForm({ ...EMPTY_FORM, managerId: defaultManagerId });
     }
-  }, [open, partner]);
+  }, [open, partner, defaultManagerId]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();

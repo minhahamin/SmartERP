@@ -10,7 +10,7 @@ import { PartnerTable } from '@/pages/partners/components/partner-table';
 import { PartnerFormDialog } from '@/pages/partners/components/partner-form-dialog';
 import { PartnerDetailDrawer } from '@/pages/partners/components/partner-detail-drawer';
 import { usePartners } from '@/pages/partners/hooks/use-partners';
-import type { Partner, PartnerType } from '@/mocks/partners';
+import type { Partner, PartnerType } from '@/pages/partners/api/partners-api';
 
 function PartnersPage() {
   const [search, setSearch] = useState('');
