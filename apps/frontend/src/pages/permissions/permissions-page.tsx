@@ -5,17 +5,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/common/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PermissionMatrixTable } from '@/pages/permissions/components/permission-matrix-table';
-import { usePermissionMatrix, useTogglePermission } from '@/pages/permissions/hooks/use-permissions';
+import { useAllPermissions, useRolesWithPermissions, useSetRolePermissions } from '@/pages/permissions/hooks/use-permissions';
+import { buildPermissionIds, toggleAction, type PermissionAction, type RoleWithPermissions } from '@/pages/permissions/api/permissions-api';
 import { useAuthStore } from '@/stores/auth-store';
-import { EMPLOYEES } from '@/mocks/employees';
-import { ROLE_LABEL, type RoleName } from '@/types/auth';
-
-const ROLE_OPTIONS = Object.keys(ROLE_LABEL) as RoleName[];
+import { roleLabel } from '@/types/auth';
 
 function PermissionsPage() {
   const currentRole = useAuthStore((state) => state.user?.role);
-  const { data: matrix, isLoading } = usePermissionMatrix();
-  const toggle = useTogglePermission();
+  const { data: roles, isLoading: rolesLoading } = useRolesWithPermissions();
+  const { data: catalog, isLoading: catalogLoading } = useAllPermissions();
+  const setRolePermissions = useSetRolePermissions();
 
   if (currentRole !== 'ADMIN') {
     return (
@@ -26,39 +25,46 @@ function PermissionsPage() {
     );
   }
 
+  const isLoading = rolesLoading || catalogLoading;
+
+  const handleToggle = (role: RoleWithPermissions, moduleKey: string, action: PermissionAction) => {
+    if (!catalog) return;
+    const nextMatrix = { ...role.matrix, [moduleKey]: toggleAction(role.matrix[moduleKey] ?? [], action) };
+    setRolePermissions.mutate({ roleId: role.id, permissionIds: buildPermissionIds(catalog, nextMatrix) });
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="권한 관리" description="역할별 모듈x액션 권한 매트릭스를 정의합니다." />
 
-      {isLoading || !matrix ? (
+      {isLoading || !roles || roles.length === 0 ? (
         <Skeleton className="h-96" />
       ) : (
-        <Tabs defaultValue="ADMIN">
+        <Tabs defaultValue={roles[0].id}>
           <TabsList>
-            {ROLE_OPTIONS.map((role) => (
-              <TabsTrigger key={role} value={role}>
-                {ROLE_LABEL[role]}
+            {roles.map((role) => (
+              <TabsTrigger key={role.id} value={role.id}>
+                {roleLabel(role.name)}
               </TabsTrigger>
             ))}
           </TabsList>
-          {ROLE_OPTIONS.map((role) => {
-            const memberCount = EMPLOYEES.filter((e) => e.role === role && e.status !== 'RESIGNED').length;
-            return (
-              <TabsContent key={role} value={role} className="flex flex-col gap-3">
-                <p className="text-sm text-muted-foreground">
-                  이 역할에 속한 인원: <span className="font-medium text-foreground">{memberCount}명</span>
-                </p>
-                <Card className="overflow-hidden p-0">
-                  <PermissionMatrixTable
-                    matrix={matrix[role]}
-                    disabled={role === 'ADMIN'}
-                    onToggle={(moduleKey, action) => toggle.mutate({ role, moduleKey, action })}
-                  />
-                </Card>
-                {role === 'ADMIN' && <p className="text-xs text-muted-foreground">ADMIN 역할의 권한은 시스템 기본값으로 고정되어 있습니다.</p>}
-              </TabsContent>
-            );
-          })}
+          {roles.map((role) => (
+            <TabsContent key={role.id} value={role.id} className="flex flex-col gap-3">
+              <p className="text-sm text-muted-foreground">
+                이 역할에 속한 인원: <span className="font-medium text-foreground">{role.memberCount}명</span>
+              </p>
+              <Card className="overflow-hidden p-0">
+                <PermissionMatrixTable
+                  matrix={role.matrix}
+                  disabled={role.name === 'ADMIN'}
+                  onToggle={(moduleKey, action) => handleToggle(role, moduleKey, action)}
+                />
+              </Card>
+              {role.name === 'ADMIN' && (
+                <p className="text-xs text-muted-foreground">ADMIN 역할의 권한은 시스템 기본값으로 고정되어 있습니다.</p>
+              )}
+            </TabsContent>
+          ))}
         </Tabs>
       )}
     </div>

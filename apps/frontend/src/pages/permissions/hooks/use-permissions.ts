@@ -1,20 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getPermissionMatrix, togglePermission } from '@/pages/permissions/api/permissions-api';
-import type { PermissionAction } from '@/mocks/permissions';
-import type { RoleName } from '@/types/auth';
+import { listAllPermissions, listRolesWithPermissions, setRolePermissions } from '@/pages/permissions/api/permissions-api';
 import { toast } from '@/stores/toast-store';
 
-const PERMISSIONS_KEY = ['permissions', 'matrix'] as const;
+const PERMISSIONS_KEY = ['permissions'] as const;
 
-export function usePermissionMatrix() {
-  return useQuery({ queryKey: PERMISSIONS_KEY, queryFn: getPermissionMatrix });
+export function useRolesWithPermissions() {
+  return useQuery({ queryKey: [...PERMISSIONS_KEY, 'roles'], queryFn: listRolesWithPermissions });
 }
 
-export function useTogglePermission() {
+export function useAllPermissions() {
+  return useQuery({ queryKey: [...PERMISSIONS_KEY, 'catalog'], queryFn: listAllPermissions });
+}
+
+export function useSetRolePermissions() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ role, moduleKey, action }: { role: RoleName; moduleKey: string; action: PermissionAction }) =>
-      togglePermission(role, moduleKey, action),
+    mutationFn: ({ roleId, permissionIds }: { roleId: string; permissionIds: string[] }) =>
+      setRolePermissions(roleId, permissionIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PERMISSIONS_KEY });
       toast({ title: '권한이 저장되었습니다.', variant: 'success' });

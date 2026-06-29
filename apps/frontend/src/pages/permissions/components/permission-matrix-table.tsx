@@ -1,5 +1,5 @@
 import { Checkbox } from '@/components/ui/checkbox';
-import { PERMISSION_ACTIONS, PERMISSION_MODULES, type PermissionAction } from '@/mocks/permissions';
+import { PERMISSION_ACTIONS, PERMISSION_MODULES, type PermissionAction } from '@/pages/permissions/api/permissions-api';
 
 interface PermissionMatrixTableProps {
   matrix: Record<string, PermissionAction[]>;

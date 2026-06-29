@@ -14,7 +14,10 @@ export class RolesService {
   findAll(requester: AuthUser) {
     return this.prisma.role.findMany({
       where: { companyId: requester.companyId },
-      include: { rolePermissions: { include: { permission: true } } },
+      include: {
+        rolePermissions: { include: { permission: true } },
+        _count: { select: { users: true } },
+      },
       orderBy: { name: 'asc' },
     });
   }
