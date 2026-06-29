@@ -2,9 +2,10 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateProductDto {
-  @ApiProperty()
+  @ApiPropertyOptional({ description: '미입력 시 자동 생성(PRD-1000부터 순번)' })
+  @IsOptional()
   @IsString()
-  sku: string;
+  sku?: string;
 
   @ApiProperty()
   @IsString()

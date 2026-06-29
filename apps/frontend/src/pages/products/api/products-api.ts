@@ -36,7 +36,8 @@ export interface ProductListQuery {
 }
 
 export interface ProductInput {
-  sku: string;
+  /** 비워두면 백엔드가 자동 생성한다(PRD-1000부터 순번) */
+  sku?: string;
   name: string;
   category: string;
   unit: string;
@@ -58,7 +59,10 @@ export async function getProduct(id: string): Promise<Product> {
 }
 
 export async function createProduct(input: ProductInput): Promise<Product> {
-  const { data } = await apiClient.post<ApiSuccess<RawProduct>>('/products', input);
+  const { data } = await apiClient.post<ApiSuccess<RawProduct>>('/products', {
+    ...input,
+    sku: input.sku || undefined,
+  });
   return toProduct(data.data);
 }
 

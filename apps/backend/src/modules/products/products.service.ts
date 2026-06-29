@@ -42,8 +42,9 @@ export class ProductsService {
     return product;
   }
 
-  create(dto: CreateProductDto, requester: AuthUser) {
-    return this.prisma.product.create({ data: { ...dto, companyId: requester.companyId } });
+  async create(dto: CreateProductDto, requester: AuthUser) {
+    const sku = dto.sku ?? (await this.nextSku(requester.companyId));
+    return this.prisma.product.create({ data: { ...dto, sku, companyId: requester.companyId } });
   }
 
   async update(id: string, dto: UpdateProductDto, requester: AuthUser) {
@@ -79,5 +80,10 @@ export class ProductsService {
       where: { id },
       data: { imageUrl: `/uploads/products/${fileName}` },
     });
+  }
+
+  private async nextSku(companyId: string): Promise<string> {
+    const count = await this.prisma.product.count({ where: { companyId } });
+    return `PRD-${1000 + count}`;
   }
 }

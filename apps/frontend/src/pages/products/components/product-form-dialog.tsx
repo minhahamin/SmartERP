@@ -87,9 +87,8 @@ function ProductFormDialog({ open, onOpenChange, product }: ProductFormDialogPro
                 <Label htmlFor="product-sku">SKU</Label>
                 <Input
                   id="product-sku"
-                  required
                   disabled={isEdit}
-                  placeholder="자동 생성 또는 직접 입력"
+                  placeholder="비워두면 자동 생성됩니다"
                   value={form.sku}
                   onChange={(e) => setForm({ ...form, sku: e.target.value })}
                 />
