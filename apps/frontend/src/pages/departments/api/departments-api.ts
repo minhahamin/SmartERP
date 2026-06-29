@@ -1,7 +1,11 @@
-import { DEPARTMENTS, type Department } from '@/mocks/departments';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-let departmentDb: Department[] = [...DEPARTMENTS];
+export interface Department {
+  id: string;
+  name: string;
+  parentId: string | null;
+  managerId: string | null;
+}
 
 export interface CreateDepartmentInput {
   name: string;
@@ -14,21 +18,16 @@ export interface UpdateDepartmentInput {
 }
 
 export async function listDepartments(): Promise<Department[]> {
-  await delay(250);
-  return departmentDb;
+  const { data } = await apiClient.get<ApiSuccess<Department[]>>('/departments');
+  return data.data;
 }
 
 export async function createDepartment(input: CreateDepartmentInput): Promise<Department> {
-  await delay(350);
-  const department: Department = { id: `dept-${Date.now()}`, managerId: null, ...input };
-  departmentDb = [...departmentDb, department];
-  return department;
+  const { data } = await apiClient.post<ApiSuccess<Department>>('/departments', input);
+  return data.data;
 }
 
 export async function updateDepartment(id: string, input: UpdateDepartmentInput): Promise<Department> {
-  await delay(350);
-  departmentDb = departmentDb.map((d) => (d.id === id ? { ...d, ...input } : d));
-  const updated = departmentDb.find((d) => d.id === id);
-  if (!updated) throw new Error('부서를 찾을 수 없습니다.');
-  return updated;
+  const { data } = await apiClient.patch<ApiSuccess<Department>>(`/departments/${id}`, input);
+  return data.data;
 }

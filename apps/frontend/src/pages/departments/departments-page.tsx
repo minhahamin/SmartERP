@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { DepartmentTree } from '@/pages/departments/components/department-tree';
 import { DepartmentFormDialog } from '@/pages/departments/components/department-form-dialog';
 import { useDepartments, useUpdateDepartment } from '@/pages/departments/hooks/use-departments';
-import { EMPLOYEES } from '@/mocks/employees';
+import { useEmployees } from '@/pages/employees/hooks/use-employees';
 import { EmployeeStatusBadge } from '@/pages/employees/components/employee-status-badge';
 
 function DepartmentsPage() {
@@ -25,6 +25,9 @@ function DepartmentsPage() {
     }
   }, [departments, selectedId]);
 
+  const effectiveDepartmentId = selectedId ?? departments?.[0]?.id;
+  const { data: memberResult } = useEmployees({ departmentId: effectiveDepartmentId, page: 1, limit: 100 });
+
   if (isLoading || !departments) {
     return (
       <div className="flex flex-col gap-6">
@@ -35,8 +38,8 @@ function DepartmentsPage() {
   }
 
   const selected = departments.find((d) => d.id === selectedId) ?? departments[0];
-  const members = EMPLOYEES.filter((e) => e.departmentId === selected.id);
-  const manager = EMPLOYEES.find((e) => e.id === selected.managerId);
+  const members = memberResult?.items ?? [];
+  const manager = members.find((m) => m.id === selected.managerId);
   const possibleParents = departments.filter((d) => d.id !== selected.id);
 
   return (

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCreateDepartment } from '@/pages/departments/hooks/use-departments';
-import type { Department } from '@/mocks/departments';
+import type { Department } from '@/pages/departments/api/departments-api';
 
 interface DepartmentFormDialogProps {
   open: boolean;

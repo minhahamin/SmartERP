@@ -1,6 +1,6 @@
 import { Building2, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Department } from '@/mocks/departments';
+import type { Department } from '@/pages/departments/api/departments-api';
 
 interface DepartmentTreeProps {
   departments: Department[];
