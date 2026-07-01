@@ -6,11 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { useCreateStockMovement } from '@/pages/stock-movements/hooks/use-stock-movements';
-import { checkAvailableStock } from '@/pages/stock-movements/api/stock-movements-api';
 import { useWarehouses } from '@/pages/inventory/hooks/use-warehouses';
-import { PRODUCTS } from '@/mocks/products';
-import { useAuthStore } from '@/stores/auth-store';
-import type { StockMovementType, StockRefType } from '@/mocks/stock-movements';
+import { useInventory } from '@/pages/inventory/hooks/use-inventory';
+import { useProducts } from '@/pages/products/hooks/use-products';
+import type { StockMovementType, StockRefType } from '@/pages/stock-movements/api/stock-movements-api';
 
 interface StockMovementFormDialogProps {
   open: boolean;
@@ -27,16 +26,17 @@ const REF_TYPE_LABEL: Record<StockRefType, string> = {
 };
 
 function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementFormDialogProps) {
-  const [productId, setProductId] = useState(PRODUCTS[0].id);
+  const [productId, setProductId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [refType, setRefType] = useState<StockRefType>(mode === 'IN' ? 'PURCHASE' : 'SALES');
   const [memo, setMemo] = useState('');
   const [insufficientConfirmOpen, setInsufficientConfirmOpen] = useState(false);
 
-  const user = useAuthStore((state) => state.user);
   const createMovement = useCreateStockMovement();
   const { data: warehouses } = useWarehouses();
+  const { data: products } = useProducts({});
+  const { data: inventoryRows } = useInventory(warehouseId);
 
   useEffect(() => {
     if (!warehouseId && warehouses && warehouses.length > 0) {
@@ -44,10 +44,15 @@ function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementForm
     }
   }, [warehouses, warehouseId]);
 
+  useEffect(() => {
+    if (!productId && products && products.length > 0) {
+      setProductId(products[0].id);
+    }
+  }, [products, productId]);
+
   const submit = () => {
-    if (!user) return;
     createMovement.mutate(
-      { productId, warehouseId, type: mode, quantity, refType, memo, createdBy: user.id },
+      { productId, warehouseId, type: mode, quantity, refType, memo },
       {
         onSuccess: () => {
           onOpenChange(false);
@@ -59,16 +64,16 @@ function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementForm
     );
   };
 
+  const available = inventoryRows?.find((row) => row.productId === productId)?.quantity ?? 0;
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (mode === 'OUT' && quantity > checkAvailableStock(productId, warehouseId)) {
+    if (mode === 'OUT' && quantity > available) {
       setInsufficientConfirmOpen(true);
       return;
     }
     submit();
   };
-
-  const available = checkAvailableStock(productId, warehouseId);
 
   return (
     <>
@@ -87,7 +92,7 @@ function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementForm
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PRODUCTS.map((p) => (
+                      {(products ?? []).map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.name} ({p.sku})
                         </SelectItem>
@@ -134,7 +139,7 @@ function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementForm
                   <Input id="sm-memo" value={memo} onChange={(e) => setMemo(e.target.value)} />
                 </div>
                 {mode === 'OUT' && (
-                  <p className="col-span-2 text-xs text-muted-foreground">현재 가용 재고: {available}{PRODUCTS.find((p) => p.id === productId)?.unit}</p>
+                  <p className="col-span-2 text-xs text-muted-foreground">현재 가용 재고: {available}{products?.find((p) => p.id === productId)?.unit}</p>
                 )}
               </div>
             </DialogBody>

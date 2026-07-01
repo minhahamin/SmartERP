@@ -1,13 +1,14 @@
 import { Badge } from '@/components/ui/badge';
-import { getProductById } from '@/mocks/products';
-import { getWarehouseById } from '@/mocks/warehouse-store';
-import { getEmployeeById } from '@/mocks/employees';
-import type { StockMovement } from '@/mocks/stock-movements';
+import { useEmployees } from '@/pages/employees/hooks/use-employees';
+import type { StockMovement } from '@/pages/stock-movements/api/stock-movements-api';
 
 const TYPE_LABEL: Record<StockMovement['type'], string> = { IN: '입고', OUT: '출고', ADJUST: '조정', TRANSFER: '이동' };
 const REF_LABEL: Record<StockMovement['refType'], string> = { PURCHASE: '구매', SALES: '판매', PRODUCTION: '생산', RETURN: '반품', ADJUSTMENT: '조정' };
 
 function StockMovementTable({ movements }: { movements: StockMovement[] }) {
+  const { data: employees } = useEmployees({ status: 'ACTIVE', page: 1, limit: 100 });
+  const employeeName = (id: string) => employees?.items.find((e) => e.id === id)?.name ?? id;
+
   if (movements.length === 0) {
     return <p className="py-16 text-center text-sm text-muted-foreground">조건에 맞는 입출고 이력이 없습니다.</p>;
   }
@@ -31,8 +32,8 @@ function StockMovementTable({ movements }: { movements: StockMovement[] }) {
           return (
             <tr key={m.id} className="border-b border-border last:border-0">
               <td className="px-4 py-2.5 tabular-nums text-muted-foreground">{m.createdAt.slice(0, 16).replace('T', ' ')}</td>
-              <td className="px-4 py-2.5 font-medium text-foreground">{getProductById(m.productId)?.name}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{getWarehouseById(m.warehouseId)?.name}</td>
+              <td className="px-4 py-2.5 font-medium text-foreground">{m.productName}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{m.warehouseName}</td>
               <td className="px-4 py-2.5">
                 <Badge variant={m.type === 'IN' ? 'success' : m.type === 'OUT' ? 'danger' : 'default'}>{TYPE_LABEL[m.type]}</Badge>
               </td>
@@ -40,7 +41,7 @@ function StockMovementTable({ movements }: { movements: StockMovement[] }) {
                 {isOut ? '' : '+'}{m.quantity}
               </td>
               <td className="px-4 py-2.5 text-muted-foreground">{REF_LABEL[m.refType]} · {m.memo}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{getEmployeeById(m.createdBy)?.name ?? m.createdBy}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{employeeName(m.createdBy)}</td>
             </tr>
           );
         })}

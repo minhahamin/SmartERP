@@ -1,4 +1,6 @@
+import axios from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ApiError } from '@/lib/api/client';
 import {
   createStockMovement,
   listStockMovements,
@@ -21,6 +23,10 @@ export function useCreateStockMovement() {
       queryClient.invalidateQueries({ queryKey: STOCK_MOVEMENTS_KEY });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       toast({ title: movement.type === 'IN' ? '입고가 등록되었습니다.' : '출고가 등록되었습니다.', variant: 'success' });
+    },
+    onError: (error: unknown) => {
+      const message = axios.isAxiosError<ApiError>(error) ? (error.response?.data.error.message ?? error.message) : '입출고 등록에 실패했습니다.';
+      toast({ title: message, variant: 'destructive' });
     },
   });
 }

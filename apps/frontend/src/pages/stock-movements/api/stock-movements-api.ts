@@ -1,8 +1,53 @@
-import { STOCK_MOVEMENTS, type StockMovement, type StockMovementType, type StockRefType } from '@/mocks/stock-movements';
-import { adjustQuantity, getQuantity } from '@/mocks/inventory-store';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-let movementDb: StockMovement[] = [...STOCK_MOVEMENTS];
+export type StockMovementType = 'IN' | 'OUT' | 'ADJUST' | 'TRANSFER';
+export type StockRefType = 'PURCHASE' | 'SALES' | 'PRODUCTION' | 'RETURN' | 'ADJUSTMENT';
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  productName: string;
+  productSku: string;
+  warehouseId: string;
+  warehouseName: string;
+  type: StockMovementType;
+  quantity: number;
+  refType: StockRefType;
+  memo: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+interface RawStockMovement {
+  id: string;
+  productId: string;
+  warehouseId: string;
+  type: StockMovementType;
+  quantity: number;
+  refType: StockRefType;
+  memo: string | null;
+  createdBy: string;
+  createdAt: string;
+  product: { name: string; sku: string };
+  warehouse: { name: string };
+}
+
+function toStockMovement(raw: RawStockMovement): StockMovement {
+  return {
+    id: raw.id,
+    productId: raw.productId,
+    productName: raw.product.name,
+    productSku: raw.product.sku,
+    warehouseId: raw.warehouseId,
+    warehouseName: raw.warehouse.name,
+    type: raw.type,
+    quantity: raw.quantity,
+    refType: raw.refType,
+    memo: raw.memo,
+    createdBy: raw.createdBy,
+    createdAt: raw.createdAt,
+  };
+}
 
 export interface StockMovementListQuery {
   productId?: string;
@@ -16,27 +61,19 @@ export interface CreateStockMovementInput {
   type: StockMovementType;
   quantity: number;
   refType: StockRefType;
-  memo: string;
-  createdBy: string;
+  memo?: string;
 }
 
+/** 백엔드는 productId/type/from/to만 필터링하므로(docs/08 8.4.4) warehouseId는 응답을 받은 뒤 프론트에서 걸러낸다 */
 export async function listStockMovements(query: StockMovementListQuery): Promise<StockMovement[]> {
-  await delay();
-  let items = [...movementDb];
-  if (query.productId) items = items.filter((m) => m.productId === query.productId);
-  if (query.warehouseId) items = items.filter((m) => m.warehouseId === query.warehouseId);
-  if (query.type) items = items.filter((m) => m.type === query.type);
-  return items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const { data } = await apiClient.get<ApiSuccess<RawStockMovement[]>>('/stock-movements', {
+    params: { productId: query.productId, type: query.type, page: 1, limit: 100 },
+  });
+  const items = data.data.map(toStockMovement);
+  return query.warehouseId ? items.filter((m) => m.warehouseId === query.warehouseId) : items;
 }
 
-export function checkAvailableStock(productId: string, warehouseId: string): number {
-  return getQuantity(productId, warehouseId);
-}
-
-export async function createStockMovement(input: CreateStockMovementInput): Promise<StockMovement> {
-  await delay(400);
-  const movement: StockMovement = { id: `sm-${Date.now()}`, createdAt: new Date('2026-06-19T09:00:00').toISOString(), ...input };
-  movementDb = [movement, ...movementDb];
-  adjustQuantity(input.productId, input.warehouseId, input.type === 'OUT' ? -input.quantity : input.quantity);
-  return movement;
+export async function createStockMovement(input: CreateStockMovementInput): Promise<{ id: string; type: StockMovementType }> {
+  const { data } = await apiClient.post<ApiSuccess<{ id: string; type: StockMovementType }>>('/stock-movements', input);
+  return data.data;
 }
