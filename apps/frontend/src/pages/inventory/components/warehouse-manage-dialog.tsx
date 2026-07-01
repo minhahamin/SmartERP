@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { WarehouseFormDialog } from '@/pages/inventory/components/warehouse-form-dialog';
 import { useDeleteWarehouse, useWarehouses } from '@/pages/inventory/hooks/use-warehouses';
-import type { Warehouse } from '@/mocks/warehouses';
+import type { Warehouse } from '@/pages/inventory/api/warehouse-api';
 
 interface WarehouseManageDialogProps {
   open: boolean;

@@ -63,6 +63,14 @@ async function main() {
     });
   }
 
+  for (const wh of [
+    { name: '본사 창고', location: '서울 마포구' },
+    { name: '경기 물류창고', location: '경기 고양시' },
+  ]) {
+    const existing = await prisma.warehouse.findFirst({ where: { companyId: company.id, name: wh.name } });
+    if (!existing) await prisma.warehouse.create({ data: { ...wh, companyId: company.id } });
+  }
+
   console.log(`시드 완료 — 회사: ${company.name}, 데모 계정 비밀번호: ${DEMO_PASSWORD}`);
 }
 

@@ -1,28 +1,32 @@
-import {
-  createWarehouseRecord,
-  deleteWarehouseRecord,
-  getWarehouses,
-  updateWarehouseRecord,
-  type WarehouseInput,
-} from '@/mocks/warehouse-store';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-export async function listWarehouses() {
-  await delay(200);
-  return getWarehouses();
+export interface Warehouse {
+  id: string;
+  name: string;
+  location: string | null;
+  managerId: string | null;
 }
 
-export async function createWarehouse(input: WarehouseInput) {
-  await delay(350);
-  return createWarehouseRecord(input);
+export interface WarehouseInput {
+  name: string;
+  location?: string;
 }
 
-export async function updateWarehouse(id: string, input: WarehouseInput) {
-  await delay(350);
-  return updateWarehouseRecord(id, input);
+export async function listWarehouses(): Promise<Warehouse[]> {
+  const { data } = await apiClient.get<ApiSuccess<Warehouse[]>>('/warehouses');
+  return data.data;
 }
 
-export async function removeWarehouse(id: string) {
-  await delay(350);
-  deleteWarehouseRecord(id);
+export async function createWarehouse(input: WarehouseInput): Promise<Warehouse> {
+  const { data } = await apiClient.post<ApiSuccess<Warehouse>>('/warehouses', input);
+  return data.data;
+}
+
+export async function updateWarehouse(id: string, input: WarehouseInput): Promise<Warehouse> {
+  const { data } = await apiClient.patch<ApiSuccess<Warehouse>>(`/warehouses/${id}`, input);
+  return data.data;
+}
+
+export async function removeWarehouse(id: string): Promise<void> {
+  await apiClient.delete(`/warehouses/${id}`);
 }

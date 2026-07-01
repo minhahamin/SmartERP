@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateWarehouse, useUpdateWarehouse } from '@/pages/inventory/hooks/use-warehouses';
-import type { Warehouse } from '@/mocks/warehouses';
+import type { Warehouse } from '@/pages/inventory/api/warehouse-api';
 
 interface WarehouseFormDialogProps {
   open: boolean;
@@ -23,7 +23,7 @@ function WarehouseFormDialog({ open, onOpenChange, warehouse }: WarehouseFormDia
 
   useEffect(() => {
     if (open) {
-      setForm(warehouse ? { name: warehouse.name, location: warehouse.location } : EMPTY_FORM);
+      setForm(warehouse ? { name: warehouse.name, location: warehouse.location ?? '' } : EMPTY_FORM);
     }
   }, [open, warehouse]);
 

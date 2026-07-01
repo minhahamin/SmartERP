@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createWarehouse, listWarehouses, removeWarehouse, updateWarehouse } from '@/pages/inventory/api/warehouse-api';
-import type { WarehouseInput } from '@/mocks/warehouse-store';
+import { createWarehouse, listWarehouses, removeWarehouse, updateWarehouse, type WarehouseInput } from '@/pages/inventory/api/warehouse-api';
 import { toast } from '@/stores/toast-store';
 
 const WAREHOUSES_KEY = ['warehouses'] as const;

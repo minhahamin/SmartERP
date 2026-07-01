@@ -1,8 +1,4 @@
-import { PRODUCTS } from '@/mocks/products';
-import { getInventorySnapshot, setQuantity } from '@/mocks/inventory-store';
-import { delay } from '@/mocks/delay';
-
-const lastMovementDate: Record<string, string> = {};
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
 export interface InventoryRow {
   productId: string;
@@ -14,22 +10,43 @@ export interface InventoryRow {
   lastMovementDate: string;
 }
 
+interface RawInventoryItem {
+  id: string;
+  productId: string;
+  warehouseId: string;
+  quantity: number;
+  updatedAt: string;
+  product: {
+    id: string;
+    sku: string;
+    name: string;
+    unit: string;
+    safetyStock: number;
+  };
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function toInventoryRow(raw: RawInventoryItem): InventoryRow {
+  return {
+    productId: raw.productId,
+    productName: raw.product.name,
+    sku: raw.product.sku,
+    unit: raw.product.unit,
+    quantity: raw.quantity,
+    safetyStock: raw.product.safetyStock,
+    lastMovementDate: formatDate(raw.updatedAt),
+  };
+}
+
 export async function listInventory(warehouseId: string): Promise<InventoryRow[]> {
-  await delay();
-  return getInventorySnapshot()
-    .filter((i) => i.warehouseId === warehouseId)
-    .map((i) => {
-      const product = PRODUCTS.find((p) => p.id === i.productId);
-      return {
-        productId: i.productId,
-        productName: product?.name ?? '-',
-        sku: product?.sku ?? '-',
-        unit: product?.unit ?? 'EA',
-        quantity: i.quantity,
-        safetyStock: product?.safetyStock ?? 0,
-        lastMovementDate: lastMovementDate[`${i.productId}-${warehouseId}`] ?? '-',
-      };
-    });
+  const { data } = await apiClient.get<ApiSuccess<RawInventoryItem[]>>('/inventory', {
+    params: { warehouseId, page: 1, limit: 200 },
+  });
+  return data.data.map(toInventoryRow);
 }
 
 export interface StockTakeCount {
@@ -38,10 +55,8 @@ export interface StockTakeCount {
 }
 
 export async function submitStockTake(warehouseId: string, counts: StockTakeCount[]): Promise<void> {
-  await delay(500);
-  const today = '2026-06-19';
-  for (const { productId, countedQty } of counts) {
-    setQuantity(productId, warehouseId, countedQty);
-    lastMovementDate[`${productId}-${warehouseId}`] = today;
-  }
+  await apiClient.post('/inventory/stock-take', {
+    warehouseId,
+    items: counts.map(({ productId, countedQty }) => ({ productId, actualQuantity: countedQty })),
+  });
 }

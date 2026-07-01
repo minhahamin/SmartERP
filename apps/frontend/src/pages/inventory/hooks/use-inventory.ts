@@ -5,7 +5,11 @@ import { toast } from '@/stores/toast-store';
 const INVENTORY_KEY = ['inventory'] as const;
 
 export function useInventory(warehouseId: string) {
-  return useQuery({ queryKey: [...INVENTORY_KEY, warehouseId], queryFn: () => listInventory(warehouseId) });
+  return useQuery({
+    queryKey: [...INVENTORY_KEY, warehouseId],
+    queryFn: () => listInventory(warehouseId),
+    enabled: Boolean(warehouseId),
+  });
 }
 
 export function useSubmitStockTake() {
