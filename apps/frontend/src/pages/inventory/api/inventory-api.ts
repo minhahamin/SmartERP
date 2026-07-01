@@ -44,7 +44,7 @@ function toInventoryRow(raw: RawInventoryItem): InventoryRow {
 
 export async function listInventory(warehouseId: string): Promise<InventoryRow[]> {
   const { data } = await apiClient.get<ApiSuccess<RawInventoryItem[]>>('/inventory', {
-    params: { warehouseId, page: 1, limit: 200 },
+    params: { warehouseId, page: 1, limit: 100 },
   });
   return data.data.map(toInventoryRow);
 }
