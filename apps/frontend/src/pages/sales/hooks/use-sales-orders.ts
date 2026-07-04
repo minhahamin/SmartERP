@@ -11,8 +11,12 @@ import { toast } from '@/stores/toast-store';
 
 const SALES_ORDERS_KEY = ['sales-orders'] as const;
 
-export function useSalesOrders(query: SalesOrderListQuery) {
-  return useQuery({ queryKey: [...SALES_ORDERS_KEY, query], queryFn: () => listSalesOrders(query) });
+export function useSalesOrders(query: SalesOrderListQuery, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: [...SALES_ORDERS_KEY, query],
+    queryFn: () => listSalesOrders(query),
+    enabled: options?.enabled,
+  });
 }
 
 export function useCreateSalesOrder() {
