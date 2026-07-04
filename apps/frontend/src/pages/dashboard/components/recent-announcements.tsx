@@ -16,18 +16,22 @@ function RecentAnnouncements({ announcements }: { announcements: RecentAnnouncem
         </Link>
       </CardHeader>
       <div className="flex flex-col divide-y divide-border px-5 pb-2">
-        {announcements.map((item) => (
-          <div key={item.id} className="flex items-center gap-3 py-2.5">
-            {item.pinned ? (
-              <Pin className="size-3.5 shrink-0 fill-primary text-primary" />
-            ) : (
-              <span className="size-3.5 shrink-0" />
-            )}
-            <Tag className="shrink-0">{item.scope}</Tag>
-            <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.title}</span>
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{item.publishedAt.slice(5)}</span>
-          </div>
-        ))}
+        {announcements.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">공지사항이 없습니다.</p>
+        ) : (
+          announcements.map((item) => (
+            <div key={item.id} className="flex items-center gap-3 py-2.5">
+              {item.pinned ? (
+                <Pin className="size-3.5 shrink-0 fill-primary text-primary" />
+              ) : (
+                <span className="size-3.5 shrink-0" />
+              )}
+              <Tag className="shrink-0">{item.scope}</Tag>
+              <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.title}</span>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{item.publishedAt.slice(5)}</span>
+            </div>
+          ))
+        )}
       </div>
     </Card>
   );

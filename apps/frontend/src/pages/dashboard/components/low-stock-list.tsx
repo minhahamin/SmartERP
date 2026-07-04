@@ -15,18 +15,22 @@ function LowStockList({ products }: { products: LowStockProduct[] }) {
         </Link>
       </CardHeader>
       <div className="flex flex-col divide-y divide-border px-5 pb-2">
-        {products.map((product) => (
-          <div key={product.id} className="flex items-center gap-3 py-2.5">
-            <AlertTriangle className="size-4 shrink-0 text-warning" />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium text-foreground">{product.name}</span>
-              <span className="text-xs text-muted-foreground">{product.warehouseName}</span>
+        {products.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">안전재고 미달 품목이 없습니다.</p>
+        ) : (
+          products.map((product) => (
+            <div key={product.id} className="flex items-center gap-3 py-2.5">
+              <AlertTriangle className="size-4 shrink-0 text-warning" />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-medium text-foreground">{product.name}</span>
+                <span className="text-xs text-muted-foreground">{product.warehouseName}</span>
+              </div>
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-red-600">
+                {product.quantity} <span className="text-muted-foreground">/ {product.safetyStock}</span>
+              </span>
             </div>
-            <span className="shrink-0 text-sm font-semibold tabular-nums text-red-600">
-              {product.quantity} <span className="text-muted-foreground">/ {product.safetyStock}</span>
-            </span>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </Card>
   );
