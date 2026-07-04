@@ -13,7 +13,7 @@ import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { AiToolsService } from './ai-tools.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
-const MODEL = 'gemini-2.5-flash-lite';
+const MODEL = 'gemini-2.5-flash';
 const MAX_TOOL_TURNS = 4;
 const HISTORY_LIMIT = 10;
 

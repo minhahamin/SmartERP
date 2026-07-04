@@ -75,11 +75,11 @@ export class RagService {
     }
   }
 
-  /** gemini-2.5-flash-lite 컨텍스트 한도 내로 앞부분만 사용(포트폴리오 데모 범위 — 문서당 최대 약 12,000자) */
+  /** gemini-2.5-flash 컨텍스트 한도 내로 앞부분만 사용(포트폴리오 데모 범위 — 문서당 최대 약 12,000자) */
   private async summarize(text: string, title: string): Promise<string> {
     const truncated = text.slice(0, 12_000);
     const response = await this.gemini!.models.generateContent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-2.5-flash',
       contents:
         '당신은 사내 문서를 한국어로 요약하는 어시스턴트입니다. 핵심 내용을 3~5문장으로 간결하게 요약하세요.\n\n' +
         `문서 제목: ${title}\n\n내용:\n${truncated}`,
