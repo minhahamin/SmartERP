@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   GoogleGenAI,
   createModelContent,
-  createPartFromFunctionCall,
   createPartFromFunctionResponse,
   createUserContent,
   type Content,
@@ -14,7 +13,7 @@ import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { AiToolsService } from './ai-tools.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
-const MODEL = 'gemini-flash-latest';
+const MODEL = 'gemini-2.5-flash-lite';
 const MAX_TOOL_TURNS = 4;
 const HISTORY_LIMIT = 10;
 
@@ -69,7 +68,7 @@ export class AiChatService {
       data: session.title ? {} : { title: dto.content.slice(0, 24) },
     });
 
-    return this.generateReply(sessionId, requester);
+    return this.generateReply(sessionId, dto.content, requester);
   }
 
   async listFaq(category: string | undefined, requester: AuthUser) {
@@ -79,7 +78,7 @@ export class AiChatService {
     });
   }
 
-  private async generateReply(sessionId: string, requester: AuthUser) {
+  private async generateReply(sessionId: string, userMessage: string, requester: AuthUser) {
     if (!this.gemini) {
       return this.prisma.chatMessage.create({
         data: {
@@ -99,7 +98,7 @@ export class AiChatService {
       .reverse()
       .map((m) => (m.role === 'USER' ? createUserContent(m.content) : createModelContent(m.content)));
 
-    const declarations = await this.aiTools.getDeclarations(requester);
+    const declarations = await this.aiTools.getDeclarations(requester, userMessage);
     const usedTools: string[] = [];
     const toolResults: Array<{ tool: string; result: unknown }> = [];
 
@@ -130,9 +129,11 @@ export class AiChatService {
           });
         }
 
-        contents.push(
-          createModelContent(calls.map((c) => createPartFromFunctionCall(c.name ?? '', c.args ?? {}))),
-        );
+        // Gemini의 "thinking" 모델은 함수 호출 응답에 thought_signature를 포함하는데, 다음 턴에
+        // 그대로 되돌려주지 않으면 400 오류가 난다. 그래서 인자만으로 새로 만들지 않고 모델이 반환한
+        // Content(candidates[0].content)를 그대로 히스토리에 이어붙인다.
+        const modelContent = response.candidates?.[0]?.content ?? createModelContent('');
+        contents.push(modelContent);
 
         const responseParts = [];
         for (const call of calls) {

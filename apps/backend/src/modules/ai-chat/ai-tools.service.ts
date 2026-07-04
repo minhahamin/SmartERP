@@ -7,6 +7,8 @@ interface ToolDefinition {
   declaration: FunctionDeclaration;
   /** null이면 별도 리소스 권한 없이 전 역할에 노출한다(근태/급여/연차처럼 본인 조회는 항상 허용되는 self-service 성격의 도구) */
   permission: { resource: string } | null;
+  /** 질문에 이 중 하나라도 포함되면 노출 후보에 넣는다(1차 라우팅, docs/09 9.2 3단계와 동일한 목적) */
+  keywords: string[];
 }
 
 /** Gemini가 채워 넣은 함수 인자(unknown)에서 안전하게 문자열만 추출한다 */
@@ -26,26 +28,33 @@ export class AiToolsService {
   private readonly tools: ToolDefinition[] = [
     {
       permission: { resource: 'INVENTORY' },
+      keywords: ['재고', '창고', '안전재고', '부족'],
       declaration: {
         name: 'getLowStockProducts',
-        description: '안전재고 기준 이하로 떨어진 제품 목록을 창고별로 조회한다.',
+        description:
+          '안전재고 기준 이하로 떨어진 제품 전체 목록을 창고별로 조회한다. 사용자가 특정 제품명을 언급하지 않고 "재고 부족한 품목", "안전재고 미달" 등 전체 현황을 물을 때 인자 없이 호출한다.',
         parametersJsonSchema: { type: 'object', properties: {}, required: [] },
       },
     },
     {
       permission: { resource: 'INVENTORY' },
+      keywords: ['재고', '창고'],
       declaration: {
         name: 'getInventoryByProduct',
-        description: '특정 제품명의 창고별 현재 재고 수량을 조회한다.',
+        description:
+          '사용자가 실제로 이름을 언급한 특정 제품 하나의 창고별 현재 재고 수량을 조회한다. 제품명이 언급되지 않았다면 이 도구 대신 getLowStockProducts를 사용한다. productName을 임의로 만들어내지 않는다.',
         parametersJsonSchema: {
           type: 'object',
-          properties: { productName: { type: 'string', description: '조회할 제품명(부분 일치 가능)' } },
+          properties: {
+            productName: { type: 'string', description: '사용자가 언급한 제품명 그대로(부분 일치 가능)' },
+          },
           required: ['productName'],
         },
       },
     },
     {
       permission: { resource: 'PRODUCT' },
+      keywords: ['제품', '단가', '원가', '가격', 'SKU'],
       declaration: {
         name: 'getProductInfo',
         description: '제품의 기본 정보(단가, 원가, 안전재고, 활성 상태 등)를 조회한다.',
@@ -58,6 +67,7 @@ export class AiToolsService {
     },
     {
       permission: { resource: 'STATISTICS' },
+      keywords: ['매출', '판매', '주문', '실적'],
       declaration: {
         name: 'getSalesSummary',
         description: '특정 연/월의 매출 합계와 주문 목록을 조회한다. 연/월 미지정 시 이번 달 기준.',
@@ -70,6 +80,7 @@ export class AiToolsService {
     },
     {
       permission: { resource: 'PARTNER' },
+      keywords: ['거래처', '고객사', '공급사', '바이어'],
       declaration: {
         name: 'getPartnerInfo',
         description: '거래처 정보를 이름으로 검색한다. 이름 미지정 시 상위 거래처 목록을 반환한다.',
@@ -82,6 +93,7 @@ export class AiToolsService {
     },
     {
       permission: { resource: 'PRODUCTION' },
+      keywords: ['생산', '오더', '라인', '지연'],
       declaration: {
         name: 'getProductionOrdersByStatus',
         description: '생산 오더를 상태별로 조회한다. 상태 미지정 시 진행중+지연 오더를 반환한다.',
@@ -96,6 +108,7 @@ export class AiToolsService {
     },
     {
       permission: null,
+      keywords: ['근태', '출근', '퇴근', '지각', '결근', '출퇴근'],
       declaration: {
         name: 'getAttendanceSummary',
         description: '직원의 최근 근태(출퇴근) 현황을 조회한다. 이름 미지정 시 요청자 본인 기준.',
@@ -108,6 +121,7 @@ export class AiToolsService {
     },
     {
       permission: null,
+      keywords: ['급여', '연봉', '월급', '임금'],
       declaration: {
         name: 'getPayrollStatus',
         description: '직원의 급여 상태와 최근 지급 내역을 조회한다. 이름 미지정 시 요청자 본인 기준.',
@@ -124,6 +138,7 @@ export class AiToolsService {
     },
     {
       permission: null,
+      keywords: ['연차', '휴가'],
       declaration: {
         name: 'getLeaveBalance',
         description: '직원의 올해 연차 잔여일수를 조회한다. 이름 미지정 시 요청자 본인 기준.',
@@ -136,6 +151,7 @@ export class AiToolsService {
     },
     {
       permission: null,
+      keywords: ['연락처', '전화번호', '직원', '부서', '직급'],
       declaration: {
         name: 'getEmployeeDirectory',
         description:
@@ -149,6 +165,7 @@ export class AiToolsService {
     },
     {
       permission: { resource: 'ANNOUNCEMENT' },
+      keywords: ['공지'],
       declaration: {
         name: 'getAnnouncements',
         description: '요청자가 볼 수 있는 최신 공지사항을 조회한다.',
@@ -157,6 +174,7 @@ export class AiToolsService {
     },
     {
       permission: { resource: 'DOCUMENT' },
+      keywords: ['규정', '정책', '취업규칙', '매뉴얼', '가이드', '문서', '계약', '보고서', '사용법', '절차'],
       declaration: {
         name: 'searchInternalDocuments',
         description:
@@ -170,11 +188,19 @@ export class AiToolsService {
     },
   ];
 
-  async getDeclarations(requester: AuthUser): Promise<FunctionDeclaration[]> {
+  /**
+   * docs/09-ai-chatbot-design.md 9.2의 "1차 라우팅" 목적을 별도 LLM 호출 없이 키워드 매칭으로 구현한다.
+   * gemini-2.5-flash-lite처럼 가벼운 모델은 도구가 10개 이상 한 번에 주어지면 엉뚱한 도구를 고르거나
+   * 인자를 지어내는 경향이 있어, 질문과 관련된 도구만 우선 좁혀서 노출하고(신뢰도↑), 키워드가 전혀
+   * 매칭되지 않는 새로운 질문에는 권한 내 전체 도구를 노출해 "내가 언급하지 않은 것도 물어보면 답한다"는
+   * 요구를 만족시킨다.
+   */
+  async getDeclarations(requester: AuthUser, userMessage: string): Promise<FunctionDeclaration[]> {
     const granted = await this.grantedReadResources(requester.roleId);
-    return this.tools
-      .filter((t) => t.permission === null || granted.has(t.permission.resource))
-      .map((t) => t.declaration);
+    const allowed = this.tools.filter((t) => t.permission === null || granted.has(t.permission.resource));
+
+    const matched = allowed.filter((t) => t.keywords.some((k) => userMessage.includes(k)));
+    return (matched.length > 0 ? matched : allowed).map((t) => t.declaration);
   }
 
   async execute(name: string, args: Record<string, unknown>, requester: AuthUser): Promise<unknown> {
