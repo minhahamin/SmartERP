@@ -13,6 +13,7 @@ import { SchedulePage } from '@/pages/schedule/schedule-page';
 import { DepartmentsPage } from '@/pages/departments/departments-page';
 import { PermissionsPage } from '@/pages/permissions/permissions-page';
 import { PartnersPage } from '@/pages/partners/partners-page';
+import { SalesOrdersPage } from '@/pages/sales/sales-orders-page';
 import { ProductsPage } from '@/pages/products/products-page';
 import { ProductDetailPage } from '@/pages/products/product-detail-page';
 import { InventoryPage } from '@/pages/inventory/inventory-page';
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
       { path: ROUTES.departments, element: <DepartmentsPage /> },
       { path: ROUTES.permissions, element: <PermissionsPage /> },
       { path: ROUTES.partners, element: <PartnersPage /> },
+      { path: ROUTES.salesOrders, element: <SalesOrdersPage /> },
       { path: ROUTES.products, element: <ProductsPage /> },
       { path: `${ROUTES.products}/:id`, element: <ProductDetailPage /> },
       { path: ROUTES.inventory, element: <InventoryPage /> },
