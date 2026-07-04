@@ -7,6 +7,7 @@ import {
   Building2,
   ShieldCheck,
   Handshake,
+  ShoppingCart,
   Package,
   Warehouse,
   ArrowLeftRight,
@@ -44,6 +45,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: '영업/생산',
     items: [
       { label: '거래처 관리', path: ROUTES.partners, icon: Handshake, roles: ['ADMIN', 'SALES_MANAGER', 'EMPLOYEE'] },
+      { label: '영업 관리', path: ROUTES.salesOrders, icon: ShoppingCart, roles: ['ADMIN', 'SALES_MANAGER', 'EMPLOYEE'] },
       { label: '제품 관리', path: ROUTES.products, icon: Package, roles: ['ADMIN', 'SALES_MANAGER', 'EMPLOYEE'] },
       { label: '재고 관리', path: ROUTES.inventory, icon: Warehouse, roles: ['ADMIN', 'SALES_MANAGER', 'EMPLOYEE'] },
       {

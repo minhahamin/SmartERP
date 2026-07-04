@@ -13,6 +13,7 @@ export const ROUTES = {
   departments: '/departments',
   permissions: '/permissions',
   partners: '/partners',
+  salesOrders: '/sales-orders',
   products: '/products',
   inventory: '/inventory',
   stockMovements: '/stock-movements',

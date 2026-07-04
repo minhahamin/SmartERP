@@ -19,6 +19,7 @@ import { LeaveModule } from './modules/leave/leave.module';
 import { PayrollModule } from './modules/payroll/payroll.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { PartnersModule } from './modules/partners/partners.module';
+import { SalesOrdersModule } from './modules/sales-orders/sales-orders.module';
 import { ProductsModule } from './modules/products/products.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
@@ -46,6 +47,7 @@ import { SearchModule } from './modules/search/search.module';
     PayrollModule,
     ScheduleModule,
     PartnersModule,
+    SalesOrdersModule,
     ProductsModule,
     InventoryModule,
     StockMovementsModule,
