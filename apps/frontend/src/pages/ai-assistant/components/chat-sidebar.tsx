@@ -38,7 +38,7 @@ function ChatSidebar({ selectedSessionId, onSelectSession }: ChatSidebarProps) {
                 selectedSessionId === session.id ? 'bg-primary-soft font-medium text-primary-soft-foreground' : 'text-foreground hover:bg-secondary',
               )}
             >
-              {session.title}
+              {session.title ?? '새 대화'}
             </button>
           ))
         ) : (

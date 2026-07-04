@@ -1,32 +1,18 @@
-export interface TableCardData {
-  columns: string[];
-  rows: (string | number)[][];
-  conditionText: string;
-  linkLabel?: string;
-  linkTo?: string;
-}
-
-export interface CitationCardData {
-  documentTitle: string;
-  page?: string;
-}
-
-export type MessageSourceType = 'data' | 'document' | 'denied' | 'none';
+export type ChatRole = 'USER' | 'ASSISTANT';
 
 export interface ChatMessage {
   id: string;
   sessionId: string;
-  role: 'user' | 'assistant';
+  role: ChatRole;
   content: string;
-  sourceType: MessageSourceType;
-  tableData?: TableCardData;
-  citation?: CitationCardData;
+  /** 이 답변을 만들기 위해 호출된 도구 이름(쉼표 구분). 도구 호출 없이 답한 경우 null */
+  functionName: string | null;
   createdAt: string;
 }
 
 export interface ChatSession {
   id: string;
   userId: string;
-  title: string;
+  title: string | null;
   createdAt: string;
 }

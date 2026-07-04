@@ -1,16 +1,15 @@
-import { Body, Controller, Get, Param, Post, Query, Sse } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Observable } from 'rxjs';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { SkipResponseEnvelope } from '../../common/decorators/skip-response-envelope.decorator';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { AiChatService } from './ai-chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
 /**
  * docs/08-api-design.md 8.4.6 — AI 챗봇. `@RequirePermissions`를 적용하지 않고 인증만 요구한다.
- * RBAC은 메시지 처리 파이프라인 내부(Function Calling 인자 강제 주입, docs/09 4장)에서 적용되며
- * 그 파이프라인 자체는 이번 작업 범위(docs/02·07·08·12·13·14) 밖이라 아직 연동되지 않았다.
+ * RBAC은 메시지 처리 파이프라인 내부(AiToolsService의 RolePermission 조회 + 실행 단계 스코핑)에서 적용된다.
+ * 실제 Gemini 호출은 도구 호출 루프가 끝나야 완성되므로, 원래 설계된 SSE 스트리밍 대신 완료된 답변을
+ * 한 번에 반환하는 일반 POST로 단순화했다(토큰 단위 스트리밍은 향후 과제).
  */
 @ApiTags('AI Chat')
 @ApiBearerAuth()
@@ -37,15 +36,9 @@ export class AiChatController {
   }
 
   @Post('sessions/:id/messages')
-  @Sse()
-  @SkipResponseEnvelope()
-  @ApiOperation({ summary: '질의 전송 → SSE 스트리밍 응답' })
-  sendMessage(
-    @Param('id') id: string,
-    @Body() dto: SendMessageDto,
-    @CurrentUser() user: AuthUser,
-  ): Observable<{ data: string }> {
-    return this.aiChatService.streamReply(id, dto, user);
+  @ApiOperation({ summary: '질의 전송 → AI 응답(Function Calling)' })
+  sendMessage(@Param('id') id: string, @Body() dto: SendMessageDto, @CurrentUser() user: AuthUser) {
+    return this.aiChatService.sendMessage(id, dto, user);
   }
 
   @Get('faq')
