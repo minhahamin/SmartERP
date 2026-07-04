@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Menu, Search, LogOut, User as UserIcon, RefreshCw, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { NotificationsPopover } from '@/components/layout/notifications-popover';
 import { AnnouncementsPopover } from '@/components/layout/announcements-popover';
+import { searchGlobal, type SearchResultType } from '@/components/layout/search-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUIStore } from '@/stores/ui-store';
 import { ROLE_LABEL, type RoleName } from '@/types/auth';
@@ -24,17 +27,41 @@ import { cn } from '@/lib/utils';
 
 const ROLE_OPTIONS = Object.keys(ROLE_LABEL) as RoleName[];
 
+const SEARCH_TYPE_LABEL: Record<SearchResultType, string> = {
+  product: '제품',
+  partner: '거래처',
+  employee: '직원',
+  document: '문서',
+  announcement: '공지사항',
+  production: '생산 오더',
+  warehouse: '창고',
+};
+
 function Header() {
   const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const switchRole = useAuthStore((state) => state.switchRole);
   const setMobileSidebarOpen = useUIStore((state) => state.setMobileSidebarOpen);
 
+  const trimmedSearch = search.trim();
+  const { data: searchResults, isFetching: searchLoading } = useQuery({
+    queryKey: ['global-search', trimmedSearch],
+    queryFn: () => searchGlobal(trimmedSearch),
+    enabled: trimmedSearch.length > 0,
+  });
+
   const handleLogout = async () => {
     await logout();
     navigate(ROUTES.login);
+  };
+
+  const goToResult = (path: string) => {
+    setSearchOpen(false);
+    setSearch('');
+    navigate(path);
   };
 
   return (
@@ -48,15 +75,55 @@ function Header() {
         <Menu className="size-[18px]" />
       </button>
 
-      <div className="relative hidden max-w-xs flex-1 sm:block">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="검색..."
-          className="pl-8"
-        />
-      </div>
+      <Popover open={searchOpen && trimmedSearch.length > 0} onOpenChange={setSearchOpen}>
+        <PopoverAnchor asChild>
+          <div className="relative hidden max-w-xs flex-1 sm:block">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setSearchOpen(false);
+              }}
+              placeholder="전체 검색..."
+              className="pl-8"
+            />
+          </div>
+        </PopoverAnchor>
+        <PopoverContent
+          align="start"
+          className="w-96 max-h-96 overflow-y-auto p-0"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+        >
+          {searchLoading ? (
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground">검색 중...</p>
+          ) : !searchResults || searchResults.length === 0 ? (
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground">'{trimmedSearch}'에 대한 검색 결과가 없습니다.</p>
+          ) : (
+            <div className="flex flex-col py-1.5">
+              {searchResults.map((result) => (
+                <button
+                  key={`${result.type}-${result.id}`}
+                  type="button"
+                  onClick={() => goToResult(result.path)}
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-secondary"
+                >
+                  <span className="min-w-0 flex-1 truncate font-medium text-foreground">{result.title}</span>
+                  {result.subtitle && <span className="shrink-0 truncate text-xs text-muted-foreground">{result.subtitle}</span>}
+                  <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                    {SEARCH_TYPE_LABEL[result.type]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
 
       <div className="flex-1 sm:hidden" />
 

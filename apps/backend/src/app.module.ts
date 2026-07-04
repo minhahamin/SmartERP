@@ -28,6 +28,7 @@ import { AnnouncementsModule } from './modules/announcements/announcements.modul
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { RagModule } from './modules/rag/rag.module';
 import { AiChatModule } from './modules/ai-chat/ai-chat.module';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { AiChatModule } from './modules/ai-chat/ai-chat.module';
     StatisticsModule,
     RagModule,
     AiChatModule,
+    SearchModule,
   ],
   providers: [
     // docs/12.5 — 1차: 인증(JwtAuthGuard) → 2차: 권한(PermissionsGuard) → 3차: Throttle
