@@ -4,10 +4,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { ChartCard } from '@/pages/statistics/components/chart-card';
-import { useHrStats, useInventoryStats, useSalesStats } from '@/pages/statistics/hooks/use-statistics';
+import { useHrStats, useInventoryStats, useMyStats, useSalesStats } from '@/pages/statistics/hooks/use-statistics';
 import { useAuthStore } from '@/stores/auth-store';
-import { generateAttendance } from '@/mocks/attendance';
-import { getLeaveBalance } from '@/mocks/leave';
 
 const PIE_COLORS = ['#ec4899', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
 
@@ -147,10 +145,9 @@ function HrStatsView() {
 }
 
 function EmployeeStatsView() {
-  const user = useAuthStore((state) => state.user);
-  if (!user) return null;
-  const attendance = generateAttendance(user.id).map((a) => ({ label: a.date.slice(5), value: Math.round((a.workMinutes / 60) * 10) / 10 }));
-  const leave = getLeaveBalance(user.id);
+  const { data, isLoading } = useMyStats();
+  if (isLoading || !data) return <ChartGridSkeleton />;
+  const { attendance, leave } = data;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
