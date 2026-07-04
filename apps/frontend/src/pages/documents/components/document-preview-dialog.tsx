@@ -1,7 +1,7 @@
 import { Sparkles, FileText, Download, UploadCloud } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import type { AppDocument } from '@/mocks/documents';
+import { toAbsoluteFileUrl, type AppDocument } from '@/pages/documents/api/documents-api';
 
 interface DocumentPreviewDialogProps {
   document: AppDocument | null;
@@ -11,7 +11,6 @@ interface DocumentPreviewDialogProps {
 
 function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentPreviewDialogProps) {
   if (!document) return null;
-  const history = document.versionHistory;
 
   return (
     <Dialog open={Boolean(document)} onOpenChange={onOpenChange}>
@@ -22,8 +21,10 @@ function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentP
             <Button variant="secondary" size="sm" onClick={() => onReupload(document)}>
               <UploadCloud /> 새 버전 업로드
             </Button>
-            <Button variant="secondary" size="sm">
-              <Download /> 다운로드
+            <Button variant="secondary" size="sm" asChild>
+              <a href={toAbsoluteFileUrl(document.fileUrl)} target="_blank" rel="noreferrer">
+                <Download /> 다운로드
+              </a>
             </Button>
           </div>
         </DialogHeader>
@@ -40,22 +41,16 @@ function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentP
               <p className="text-sm text-muted-foreground">
                 {document.indexStatus === 'DONE'
                   ? document.summary || '요약 정보가 없습니다.'
-                  : '색인이 완료되면 AI 요약이 자동 생성됩니다.'}
+                  : document.indexStatus === 'FAILED'
+                    ? 'AI 색인에 실패했습니다.'
+                    : '색인이 완료되면 AI 요약이 자동 생성됩니다.'}
               </p>
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-semibold text-muted-foreground">버전 이력 ({history.length + 1})</p>
-              <div className="flex flex-col gap-1 text-sm">
-                <div className="flex items-center justify-between text-foreground">
-                  <span className="font-medium">v{document.version} (현재)</span>
-                  <span className="tabular-nums">{document.createdAt}</span>
-                </div>
-                {history.map((h) => (
-                  <div key={h.version} className="flex items-center justify-between text-muted-foreground">
-                    <span>v{h.version}</span>
-                    <span className="tabular-nums">{h.date}</span>
-                  </div>
-                ))}
+              <p className="mb-1.5 text-xs font-semibold text-muted-foreground">버전</p>
+              <div className="flex items-center justify-between text-sm text-foreground">
+                <span className="font-medium">v{document.version} (현재)</span>
+                <span className="tabular-nums">{document.createdAt.slice(0, 10)}</span>
               </div>
             </div>
           </div>

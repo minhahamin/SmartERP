@@ -14,8 +14,8 @@ import { ReuploadFormDialog } from '@/pages/documents/components/reupload-form-d
 import { FolderFormDialog } from '@/pages/documents/components/folder-form-dialog';
 import { useDeleteAllDocuments, useDeleteDocuments, useDocuments } from '@/pages/documents/hooks/use-documents';
 import { useDeleteDocumentFolder, useDocumentFolders } from '@/pages/documents/hooks/use-folders';
-import type { AppDocument } from '@/mocks/documents';
-import type { DocumentFolder } from '@/mocks/document-folders';
+import type { AppDocument } from '@/pages/documents/api/documents-api';
+import type { DocumentFolder } from '@/pages/documents/api/folder-api';
 
 function DocumentsPage() {
   const [folderId, setFolderId] = useState<string>('ALL');

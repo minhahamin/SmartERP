@@ -17,6 +17,11 @@ export class UploadDocumentDto {
   @IsUUID()
   departmentId?: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  folderId?: string;
+
   @ApiPropertyOptional({ default: true })
   @IsOptional()
   @Type(() => Boolean)

@@ -3,7 +3,7 @@ import { UploadCloud } from 'lucide-react';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useReuploadDocument } from '@/pages/documents/hooks/use-documents';
-import type { AppDocument } from '@/mocks/documents';
+import type { AppDocument } from '@/pages/documents/api/documents-api';
 
 interface ReuploadFormDialogProps {
   document: AppDocument | null;
@@ -19,9 +19,8 @@ function ReuploadFormDialog({ document, onOpenChange }: ReuploadFormDialogProps)
 
   const handleSubmit = () => {
     if (!file) return;
-    const fileType = file.name.split('.').pop()?.toUpperCase() ?? document.fileType;
     reupload.mutate(
-      { id: document.id, input: { fileType, fileSize: file.size } },
+      { id: document.id, file },
       {
         onSuccess: () => {
           onOpenChange(false);

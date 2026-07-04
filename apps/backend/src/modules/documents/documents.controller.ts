@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
@@ -9,6 +19,7 @@ import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { DocumentsService } from './documents.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { DocumentQueryDto } from './dto/document-query.dto';
+import { BulkDeleteDocumentsDto } from './dto/bulk-delete-documents.dto';
 
 /** docs/08-api-design.md 8.4.5 — 문서 관리 */
 @ApiTags('Documents')
@@ -68,5 +79,29 @@ export class DocumentsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.documentsService.addVersion(id, file, user);
+  }
+
+  @Post('bulk-delete')
+  @RequirePermissions('DOCUMENT', 'DELETE')
+  @Audit('DOCUMENT_BULK_DELETE', 'DOCUMENT')
+  @ApiOperation({ summary: '문서 선택 삭제' })
+  bulkRemove(@Body() dto: BulkDeleteDocumentsDto, @CurrentUser() user: AuthUser) {
+    return this.documentsService.removeMany(dto.ids, user);
+  }
+
+  @Delete()
+  @RequirePermissions('DOCUMENT', 'DELETE')
+  @Audit('DOCUMENT_DELETE_ALL', 'DOCUMENT')
+  @ApiOperation({ summary: '전체 문서 삭제' })
+  removeAll(@CurrentUser() user: AuthUser) {
+    return this.documentsService.removeAll(user);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('DOCUMENT', 'DELETE')
+  @Audit('DOCUMENT_DELETE', 'DOCUMENT')
+  @ApiOperation({ summary: '문서 삭제' })
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.documentsService.remove(id, user);
   }
 }

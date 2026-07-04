@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 import { DocumentCategory } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
@@ -8,6 +8,11 @@ export class DocumentQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(DocumentCategory)
   category?: DocumentCategory;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  folderId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

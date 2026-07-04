@@ -6,7 +6,6 @@ import {
   reuploadDocument,
   uploadDocument,
   type DocumentListQuery,
-  type ReuploadDocumentInput,
   type UploadDocumentInput,
 } from '@/pages/documents/api/documents-api';
 import { toast } from '@/stores/toast-store';
@@ -17,7 +16,7 @@ export function useDocuments(query: DocumentListQuery) {
   return useQuery({
     queryKey: [...DOCUMENTS_KEY, query],
     queryFn: () => listDocuments(query),
-    refetchInterval: (q) => (q.state.data?.some((d) => d.indexStatus === 'PENDING' || d.indexStatus === 'PROCESSING') ? 1000 : false),
+    refetchInterval: (q) => (q.state.data?.some((d) => d.indexStatus === 'PENDING' || d.indexStatus === 'PROCESSING') ? 2000 : false),
   });
 }
 
@@ -35,7 +34,7 @@ export function useUploadDocument() {
 export function useReuploadDocument() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: ReuploadDocumentInput }) => reuploadDocument(id, input),
+    mutationFn: ({ id, file }: { id: string; file: File }) => reuploadDocument(id, file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DOCUMENTS_KEY });
       toast({ title: '새 버전이 업로드되었습니다. 색인이 다시 진행됩니다.', variant: 'success' });

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateDocumentFolder, useUpdateDocumentFolder } from '@/pages/documents/hooks/use-folders';
-import type { DocumentFolder } from '@/mocks/document-folders';
+import type { DocumentFolder } from '@/pages/documents/api/folder-api';
 
 interface FolderFormDialogProps {
   open: boolean;

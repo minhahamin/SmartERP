@@ -1,28 +1,29 @@
-import {
-  createDocumentFolderRecord,
-  deleteDocumentFolderRecord,
-  getDocumentFolders,
-  updateDocumentFolderRecord,
-  type DocumentFolderInput,
-} from '@/mocks/document-folder-store';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-export async function listDocumentFolders() {
-  await delay(200);
-  return getDocumentFolders();
+export interface DocumentFolder {
+  id: string;
+  name: string;
 }
 
-export async function createDocumentFolder(input: DocumentFolderInput) {
-  await delay(300);
-  return createDocumentFolderRecord(input);
+export interface DocumentFolderInput {
+  name: string;
 }
 
-export async function updateDocumentFolder(id: string, input: DocumentFolderInput) {
-  await delay(300);
-  return updateDocumentFolderRecord(id, input);
+export async function listDocumentFolders(): Promise<DocumentFolder[]> {
+  const { data } = await apiClient.get<ApiSuccess<DocumentFolder[]>>('/document-folders');
+  return data.data;
 }
 
-export async function removeDocumentFolder(id: string) {
-  await delay(300);
-  deleteDocumentFolderRecord(id);
+export async function createDocumentFolder(input: DocumentFolderInput): Promise<DocumentFolder> {
+  const { data } = await apiClient.post<ApiSuccess<DocumentFolder>>('/document-folders', input);
+  return data.data;
+}
+
+export async function updateDocumentFolder(id: string, input: DocumentFolderInput): Promise<DocumentFolder> {
+  const { data } = await apiClient.patch<ApiSuccess<DocumentFolder>>(`/document-folders/${id}`, input);
+  return data.data;
+}
+
+export async function removeDocumentFolder(id: string): Promise<void> {
+  await apiClient.delete(`/document-folders/${id}`);
 }

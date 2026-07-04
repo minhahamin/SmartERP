@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, unlink, writeFile } from 'fs/promises';
 import { join } from 'path';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
+import { RagService } from '../rag/rag.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { DocumentQueryDto } from './dto/document-query.dto';
 
@@ -12,11 +13,17 @@ const UPLOAD_DIR = join(process.cwd(), 'uploads', 'documents');
 
 @Injectable()
 export class DocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(DocumentsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ragService: RagService,
+  ) {}
 
   async findAll(query: DocumentQueryDto, requester: AuthUser) {
     const where: Record<string, unknown> = { companyId: requester.companyId };
     if (query.category) where.category = query.category;
+    if (query.folderId) where.folderId = query.folderId;
     if (query.search) where.title = { contains: query.search, mode: 'insensitive' };
 
     const [items, total] = await Promise.all([
@@ -39,16 +46,17 @@ export class DocumentsService {
 
   /**
    * docs/13-system-architecture.md는 S3 Presigned URL 업로드를 전제하지만, 실제 AWS 연동은
-   * 범위 밖이라 로컬 디스크에 저장한다. indexStatus=PENDING으로 두면 docs/10-11(RAG 파이프라인,
-   * 이번 작업 범위 밖)의 Worker가 이어서 Chunking/Embedding을 수행하는 지점이 된다.
+   * 범위 밖이라 로컬 디스크에 저장한다. 저장 직후 RagService.indexDocument를 await 없이 호출해
+   * PDF 텍스트 추출 → AI 요약까지 비동기로 진행하고, 프론트는 indexStatus를 폴링해 완료를 확인한다.
    */
   async upload(file: Express.Multer.File, dto: UploadDocumentDto, requester: AuthUser) {
     if (!file) throw new BadRequestException('업로드할 파일이 없습니다.');
     const fileUrl = await this.saveFile(file);
 
-    return this.prisma.document.create({
+    const document = await this.prisma.document.create({
       data: {
         companyId: requester.companyId,
+        folderId: dto.folderId,
         title: dto.title,
         category: dto.category,
         fileUrl,
@@ -61,6 +69,8 @@ export class DocumentsService {
         indexStatus: 'PENDING',
       },
     });
+    this.triggerIndexing(document.id);
+    return document;
   }
 
   async addVersion(id: string, file: Express.Multer.File, requester: AuthUser) {
@@ -68,7 +78,7 @@ export class DocumentsService {
     const document = await this.findOne(id, requester);
     const fileUrl = await this.saveFile(file);
 
-    return this.prisma.document.update({
+    const updated = await this.prisma.document.update({
       where: { id },
       data: {
         fileUrl,
@@ -76,8 +86,11 @@ export class DocumentsService {
         fileSize: file.size,
         version: document.version + 1,
         indexStatus: 'PENDING',
+        summary: null,
       },
     });
+    this.triggerIndexing(id);
+    return updated;
   }
 
   async getSummary(id: string, requester: AuthUser) {
@@ -86,11 +99,45 @@ export class DocumentsService {
       return {
         documentId: id,
         summary: null,
-        message: '색인이 진행 중입니다. 완료 후 AI 요약을 제공합니다.',
+        message:
+          document.indexStatus === 'FAILED'
+            ? 'AI 색인에 실패했습니다.'
+            : '색인이 진행 중입니다. 완료 후 AI 요약을 제공합니다.',
       };
     }
-    // AI 요약 생성/저장은 docs/09~11(RAG 파이프라인) 범위 — 이번 작업에서는 미연동
-    return { documentId: id, summary: null, message: 'AI 요약 기능은 RAG 파이프라인 연동 후 제공됩니다.' };
+    return { documentId: id, summary: document.summary, message: null };
+  }
+
+  async remove(id: string, requester: AuthUser) {
+    const document = await this.findOne(id, requester);
+    await this.prisma.document.delete({ where: { id } });
+    await this.deleteFile(document.fileUrl);
+    return { success: true };
+  }
+
+  async removeMany(ids: string[], requester: AuthUser) {
+    const documents = await this.prisma.document.findMany({
+      where: { id: { in: ids }, companyId: requester.companyId },
+    });
+    await this.prisma.document.deleteMany({ where: { id: { in: documents.map((d) => d.id) } } });
+    await Promise.all(documents.map((d) => this.deleteFile(d.fileUrl)));
+    return { success: true };
+  }
+
+  async removeAll(requester: AuthUser) {
+    const documents = await this.prisma.document.findMany({ where: { companyId: requester.companyId } });
+    await this.prisma.document.deleteMany({ where: { companyId: requester.companyId } });
+    await Promise.all(documents.map((d) => this.deleteFile(d.fileUrl)));
+    return { success: true };
+  }
+
+  private triggerIndexing(documentId: string): void {
+    this.ragService.indexDocument(documentId).catch((error) => {
+      this.logger.error(
+        `색인 트리거 실패 documentId=${documentId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    });
   }
 
   private async saveFile(file: Express.Multer.File): Promise<string> {
@@ -100,5 +147,13 @@ export class DocumentsService {
     const fileName = `${randomUUID()}-${originalName}`;
     await writeFile(join(UPLOAD_DIR, fileName), file.buffer);
     return `/uploads/documents/${fileName}`;
+  }
+
+  private async deleteFile(fileUrl: string): Promise<void> {
+    try {
+      await unlink(join(process.cwd(), fileUrl.replace(/^\//, '')));
+    } catch {
+      // 파일이 이미 없어도 DB 정합성 삭제가 우선이므로 무시한다
+    }
   }
 }

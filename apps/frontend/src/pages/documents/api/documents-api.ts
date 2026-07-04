@@ -1,81 +1,75 @@
-import type { AppDocument } from '@/mocks/documents';
-import {
-  addDocument,
-  getDocumentSnapshot,
-  patchDocument,
-  removeAllDocuments,
-  removeDocuments,
-  scheduleIndexing,
-} from '@/mocks/document-store';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-const TODAY = '2026-06-19';
+export type DocumentCategory = 'POLICY' | 'CONTRACT' | 'REPORT' | 'MANUAL' | 'HR' | 'ETC';
+export type DocumentIndexStatus = 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
+
+export interface AppDocument {
+  id: string;
+  title: string;
+  category: DocumentCategory;
+  folderId: string | null;
+  version: number;
+  fileUrl: string;
+  fileType: string;
+  fileSize: number;
+  indexStatus: DocumentIndexStatus;
+  isPublic: boolean;
+  uploadedBy: string;
+  summary: string | null;
+  createdAt: string;
+}
+
+/** 백엔드가 내려주는 /uploads/... 상대 경로를 다운로드 링크로 쓸 수 있는 절대 URL로 바꾼다 */
+const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api/v1').replace(/\/api\/v1\/?$/, '');
+
+export function toAbsoluteFileUrl(fileUrl: string): string {
+  return fileUrl.startsWith('http') ? fileUrl : `${API_ORIGIN}${fileUrl}`;
+}
 
 export interface DocumentListQuery {
   folderId?: string;
 }
 
 export async function listDocuments(query: DocumentListQuery): Promise<AppDocument[]> {
-  await delay();
-  let items = [...getDocumentSnapshot()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  if (query.folderId) items = items.filter((d) => d.folderId === query.folderId);
-  return items;
+  const { data } = await apiClient.get<ApiSuccess<AppDocument[]>>('/documents', {
+    params: { folderId: query.folderId, page: 1, limit: 100 },
+  });
+  return data.data;
 }
 
 export interface UploadDocumentInput {
   title: string;
-  folderId: string;
-  fileType: string;
-  fileSize: number;
-  uploadedBy: string;
+  category: DocumentCategory;
+  folderId?: string;
+  file: File;
 }
 
 export async function uploadDocument(input: UploadDocumentInput): Promise<AppDocument> {
-  await delay(300);
-  const doc: AppDocument = {
-    id: `doc-${Date.now()}`,
-    version: 1,
-    isPublic: true,
-    summary: '',
-    createdAt: TODAY,
-    indexStatus: 'PENDING',
-    versionHistory: [],
-    ...input,
-  };
-  addDocument(doc);
-  scheduleIndexing(doc.id);
-  return doc;
-}
+  const formData = new FormData();
+  formData.append('file', input.file);
+  formData.append('title', input.title);
+  formData.append('category', input.category);
+  if (input.folderId) formData.append('folderId', input.folderId);
 
-export interface ReuploadDocumentInput {
-  fileType: string;
-  fileSize: number;
-}
-
-/** 기존 문서에 새 버전을 업로드한다 — 직전 버전은 versionHistory에 보존하고 색인을 다시 PENDING부터 진행한다. */
-export async function reuploadDocument(documentId: string, input: ReuploadDocumentInput): Promise<AppDocument> {
-  await delay(350);
-  const current = getDocumentSnapshot().find((d) => d.id === documentId);
-  if (!current) throw new Error('문서를 찾을 수 없습니다.');
-
-  const updated = patchDocument(documentId, {
-    version: current.version + 1,
-    fileType: input.fileType,
-    fileSize: input.fileSize,
-    createdAt: TODAY,
-    indexStatus: 'PENDING',
-    versionHistory: [{ version: current.version, date: current.createdAt }, ...current.versionHistory],
+  const { data } = await apiClient.post<ApiSuccess<AppDocument>>('/documents', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
-  scheduleIndexing(documentId);
-  return updated;
+  return data.data;
+}
+
+export async function reuploadDocument(documentId: string, file: File): Promise<AppDocument> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await apiClient.post<ApiSuccess<AppDocument>>(`/documents/${documentId}/versions`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data.data;
 }
 
 export async function deleteDocuments(ids: string[]): Promise<void> {
-  await delay(350);
-  removeDocuments(ids);
+  await apiClient.post('/documents/bulk-delete', { ids });
 }
 
 export async function deleteAllDocuments(): Promise<void> {
-  await delay(350);
-  removeAllDocuments();
+  await apiClient.delete('/documents');
 }

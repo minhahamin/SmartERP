@@ -35,6 +35,7 @@ model Company {
   productionOrders  ProductionOrder[]
   salesOrders       SalesOrder[]
   documents         Document[]
+  documentFolders   DocumentFolder[]
   announcements     Announcement[]
   schedules         Schedule[]
   faqItems          FaqItem[]
@@ -513,9 +514,24 @@ enum ProductionStatus {
 }
 
 // ── Knowledge / RAG ───────────────────────────────────────
+model DocumentFolder {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id])
+  documents Document[]
+
+  @@unique([companyId, name])
+  @@map("document_folders")
+}
+
 model Document {
   id           String           @id @default(uuid())
   companyId    String
+  folderId     String?
   title        String
   category     DocumentCategory
   fileUrl      String
@@ -524,6 +540,8 @@ model Document {
   version      Int              @default(1)
   status       DocumentStatus   @default(DRAFT)
   indexStatus  IndexStatus      @default(PENDING)
+  /** RagService가 PDF 텍스트를 추출해 OpenAI로 생성하는 AI 요약(docs/09 summarizeDocument) */
+  summary      String?          @db.Text
   isPublic     Boolean          @default(true)
   departmentId String?
   uploadedBy   String
@@ -531,6 +549,7 @@ model Document {
   updatedAt    DateTime         @updatedAt
 
   company  Company         @relation(fields: [companyId], references: [id])
+  folder   DocumentFolder? @relation(fields: [folderId], references: [id])
   chunks   DocumentChunk[]
   faqItems FaqItem[]
 
