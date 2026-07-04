@@ -29,10 +29,18 @@ function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentP
           </div>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-[1.4fr_1fr]">
-          <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-md bg-gray-50 text-muted-foreground">
-            <FileText className="size-10" />
-            <p className="text-xs">{document.fileType} 미리보기</p>
-          </div>
+          {document.fileType === 'application/pdf' ? (
+            <iframe
+              title={document.title}
+              src={toAbsoluteFileUrl(document.fileUrl)}
+              className="h-80 w-full rounded-md border border-border md:h-full"
+            />
+          ) : (
+            <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-md bg-gray-50 text-muted-foreground">
+              <FileText className="size-10" />
+              <p className="text-xs">{document.fileType} 파일은 미리보기를 지원하지 않습니다</p>
+            </div>
+          )}
           <div className="flex flex-col gap-4">
             <div>
               <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ai-accent">
