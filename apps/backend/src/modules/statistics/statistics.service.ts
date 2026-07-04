@@ -158,40 +158,140 @@ export class StatisticsService {
     };
   }
 
-  /** docs/02 2.2 — 통계 분석: ADMIN=전체, HR_MANAGER=인사, SALES_MANAGER=영업, EMPLOYEE=본인만 */
+  /** docs/02 2.2 — 대시보드: ADMIN=전체, HR_MANAGER=인사, SALES_MANAGER=영업, EMPLOYEE=본인만 KPI가 다르다 */
   async getDashboard(requester: AuthUser) {
-    switch (requester.roleName) {
-      case 'ADMIN':
-        return this.getCompanyWideStats(requester.companyId);
-      case 'HR_MANAGER':
-        return this.getHrStats(requester.companyId);
-      case 'SALES_MANAGER':
-        return this.getSalesStats(requester.companyId);
-      default:
-        return this.getMyStats(requester);
+    const [kpis, salesTrend, lowStockProducts, recentAnnouncements] = await Promise.all([
+      this.getKpis(requester),
+      this.getRecentSalesTrend(requester.companyId),
+      this.getLowStockProducts(requester.companyId),
+      this.getRecentAnnouncements(requester),
+    ]);
+    return { kpis, salesTrend, lowStockProducts, recentAnnouncements };
+  }
+
+  private async getKpis(requester: AuthUser) {
+    const { companyId, sub, roleName } = requester;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    switch (roleName) {
+      case 'ADMIN': {
+        const [revenue, headcount, lowStockCount, delayedCount] = await Promise.all([
+          this.sumRevenueSince(companyId, monthStart),
+          this.prisma.user.count({ where: { companyId, status: 'ACTIVE' } }),
+          this.countLowStock(companyId),
+          this.prisma.productionOrder.count({ where: { companyId, status: 'DELAYED' } }),
+        ]);
+        return [
+          { key: 'revenue', label: '이번 달 매출', value: formatWon(revenue) },
+          { key: 'headcount', label: '재직 인원', value: `${headcount}명` },
+          {
+            key: 'lowStock',
+            label: '재고 경고',
+            value: `${lowStockCount}건`,
+            helperText: lowStockCount > 0 ? '즉시 확인 필요' : undefined,
+          },
+          {
+            key: 'delayedProduction',
+            label: '생산 지연',
+            value: `${delayedCount}건`,
+            helperText: '생산 관리에서 확인',
+          },
+        ];
+      }
+      case 'HR_MANAGER': {
+        const [headcount, pendingLeave, draftPayroll, delayedCount] = await Promise.all([
+          this.prisma.user.count({ where: { companyId, status: 'ACTIVE' } }),
+          this.prisma.leaveRequest.count({ where: { user: { companyId }, status: 'PENDING' } }),
+          this.prisma.payroll.count({
+            where: {
+              user: { companyId },
+              status: 'DRAFT',
+              payYear: now.getFullYear(),
+              payMonth: now.getMonth() + 1,
+            },
+          }),
+          this.prisma.productionOrder.count({ where: { companyId, status: 'DELAYED' } }),
+        ]);
+        return [
+          { key: 'headcount', label: '재직 인원', value: `${headcount}명` },
+          {
+            key: 'pendingLeave',
+            label: '휴가 승인 대기',
+            value: `${pendingLeave}건`,
+            helperText: pendingLeave > 0 ? '결재 필요' : undefined,
+          },
+          {
+            key: 'unpaidPayroll',
+            label: '이번 달 급여 미확정',
+            value: `${draftPayroll}건`,
+            helperText: `${now.getMonth() + 1}월 급여`,
+          },
+          { key: 'delayedProduction', label: '생산 지연(참고)', value: `${delayedCount}건` },
+        ];
+      }
+      case 'SALES_MANAGER': {
+        const [revenue, partners, lowStockCount] = await Promise.all([
+          this.sumRevenueSince(companyId, monthStart),
+          this.prisma.partner.count({ where: { companyId } }),
+          this.countLowStock(companyId),
+        ]);
+        return [
+          { key: 'revenue', label: '이번 달 매출', value: formatWon(revenue) },
+          { key: 'partners', label: '거래처 수', value: `${partners}곳` },
+          {
+            key: 'lowStock',
+            label: '재고 경고',
+            value: `${lowStockCount}건`,
+            helperText: lowStockCount > 0 ? '즉시 확인 필요' : undefined,
+          },
+        ];
+      }
+      default: {
+        const year = now.getFullYear();
+        const [leaveBalance, pendingLeave, delayedCount, myPayroll] = await Promise.all([
+          this.prisma.leaveBalance.findUnique({ where: { userId_year: { userId: sub, year } } }),
+          this.prisma.leaveRequest.count({ where: { userId: sub, status: 'PENDING' } }),
+          this.prisma.productionOrder.count({ where: { managerId: sub, status: 'DELAYED' } }),
+          this.prisma.payroll.findFirst({
+            where: { userId: sub, payYear: year, payMonth: now.getMonth() + 1 },
+          }),
+        ]);
+        return [
+          {
+            key: 'myLeaveBalance',
+            label: '내 연차 잔여',
+            value: leaveBalance ? `${Number(leaveBalance.remainingDays)}일` : '0일',
+          },
+          {
+            key: 'pendingLeave',
+            label: '내 휴가 신청',
+            value: `${pendingLeave}건`,
+            helperText: pendingLeave > 0 ? '승인 대기' : undefined,
+          },
+          {
+            key: 'delayedProduction',
+            label: '내 생산 작업',
+            value: `${delayedCount}건`,
+            helperText: delayedCount > 0 ? '지연' : undefined,
+          },
+          {
+            key: 'unpaidPayroll',
+            label: '이번 달 급여',
+            value: myPayroll ? (myPayroll.status === 'DRAFT' ? '미확정' : '확정') : '없음',
+            helperText: `${now.getMonth() + 1}월`,
+          },
+        ];
+      }
     }
   }
 
-  private async getCompanyWideStats(companyId: string) {
-    const now = new Date();
-    const [totalEmployees, totalDepartments, lowStockCount, delayedOrderCount, pendingLeaveCount] =
-      await Promise.all([
-        this.prisma.user.count({ where: { companyId, status: 'ACTIVE' } }),
-        this.prisma.department.count({ where: { companyId } }),
-        this.countLowStock(companyId),
-        this.prisma.productionOrder.count({
-          where: { companyId, status: { notIn: ['COMPLETED', 'CANCELLED'] }, dueDate: { lt: now } },
-        }),
-        this.prisma.leaveRequest.count({ where: { user: { companyId }, status: 'PENDING' } }),
-      ]);
-    return {
-      scope: 'COMPANY',
-      totalEmployees,
-      totalDepartments,
-      lowStockCount,
-      delayedOrderCount,
-      pendingLeaveCount,
-    };
+  private async sumRevenueSince(companyId: string, since: Date): Promise<number> {
+    const agg = await this.prisma.salesOrder.aggregate({
+      where: { companyId, orderDate: { gte: since }, status: { not: 'CANCELLED' } },
+      _sum: { totalAmount: true },
+    });
+    return Number(agg._sum.totalAmount ?? 0);
   }
 
   /** Prisma는 두 컬럼(quantity vs product.safetyStock) 비교를 표준 where로 표현할 수 없어 raw SQL을 사용한다 */
@@ -204,47 +304,71 @@ export class StatisticsService {
     return Number(rows[0]?.count ?? 0);
   }
 
-  private async getHrStats(companyId: string) {
-    const [totalEmployees, pendingLeaveCount, draftPayrollCount] = await Promise.all([
-      this.prisma.user.count({ where: { companyId, status: 'ACTIVE' } }),
-      this.prisma.leaveRequest.count({ where: { user: { companyId }, status: 'PENDING' } }),
-      this.prisma.payroll.count({ where: { user: { companyId }, status: 'DRAFT' } }),
-    ]);
-    return { scope: 'HR', totalEmployees, pendingLeaveCount, draftPayrollCount };
+  private async getRecentSalesTrend(companyId: string) {
+    const now = new Date();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const orders = await this.prisma.salesOrder.findMany({
+      where: { companyId, orderDate: { gte: sixMonthsAgo }, status: { not: 'CANCELLED' } },
+    });
+
+    const monthlyMap = new Map<string, number>();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      monthlyMap.set(`${d.getFullYear()}-${d.getMonth()}`, 0);
+    }
+    for (const order of orders) {
+      const key = `${order.orderDate.getFullYear()}-${order.orderDate.getMonth()}`;
+      if (monthlyMap.has(key)) monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + Number(order.totalAmount));
+    }
+
+    return Array.from(monthlyMap.entries()).map(([key, revenue]) => ({
+      month: MONTH_LABELS[Number(key.split('-')[1])],
+      revenue,
+    }));
   }
 
-  private async getSalesStats(companyId: string) {
-    const [totalPartners, thisMonthOrderAgg] = await Promise.all([
-      this.prisma.partner.count({ where: { companyId } }),
-      this.prisma.salesOrder.aggregate({
-        where: {
-          companyId,
-          orderDate: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
-        },
-        _sum: { totalAmount: true },
-        _count: true,
-      }),
-    ]);
-    return {
-      scope: 'SALES',
-      totalPartners,
-      thisMonthOrderCount: thisMonthOrderAgg._count,
-      thisMonthOrderTotal: thisMonthOrderAgg._sum.totalAmount ?? 0,
-    };
+  /** 대시보드 요약 카드용 상위 5건 — 가장 부족한(현재고 낮은) 순 */
+  private async getLowStockProducts(companyId: string) {
+    return this.prisma.$queryRaw<
+      { id: string; name: string; quantity: number; safetyStock: number; warehouseName: string }[]
+    >`
+      SELECT p.id, p.name, i.quantity, p."safetyStock", w.name as "warehouseName"
+      FROM inventories i
+      JOIN products p ON p.id = i."productId"
+      JOIN warehouses w ON w.id = i."warehouseId"
+      WHERE p."companyId" = ${companyId} AND i.quantity <= p."safetyStock"
+      ORDER BY i.quantity ASC
+      LIMIT 5
+    `;
   }
 
-  private async getMyStats(requester: AuthUser) {
-    const year = new Date().getFullYear();
-    const [attendanceThisMonthCount, leaveBalance, latestPayroll] = await Promise.all([
-      this.prisma.attendance.count({
-        where: { userId: requester.sub, workDate: { gte: new Date(year, new Date().getMonth(), 1) } },
-      }),
-      this.prisma.leaveBalance.findUnique({ where: { userId_year: { userId: requester.sub, year } } }),
-      this.prisma.payroll.findFirst({
-        where: { userId: requester.sub },
-        orderBy: [{ payYear: 'desc' }, { payMonth: 'desc' }],
-      }),
-    ]);
-    return { scope: 'SELF', attendanceThisMonthCount, leaveBalance, latestPayroll };
+  private async getRecentAnnouncements(requester: AuthUser) {
+    const announcements = await this.prisma.announcement.findMany({
+      where: {
+        companyId: requester.companyId,
+        OR: [{ targetRoleId: null }, { targetRoleId: requester.roleId }],
+      },
+      orderBy: [{ isPinned: 'desc' }, { publishedAt: 'desc' }],
+      take: 3,
+    });
+
+    const roleIds = [
+      ...new Set(announcements.map((a) => a.targetRoleId).filter((id): id is string => id !== null)),
+    ];
+    const roles =
+      roleIds.length > 0 ? await this.prisma.role.findMany({ where: { id: { in: roleIds } } }) : [];
+    const roleNameById = new Map(roles.map((r) => [r.id, r.name]));
+
+    return announcements.map((a) => ({
+      id: a.id,
+      title: a.title,
+      scope: a.targetRoleId ? (ROLE_LABEL[roleNameById.get(a.targetRoleId) ?? ''] ?? '지정 역할') : '전사',
+      pinned: a.isPinned,
+      publishedAt: a.publishedAt.toISOString().slice(0, 10),
+    }));
   }
+}
+
+function formatWon(amount: number): string {
+  return `₩${amount.toLocaleString('ko-KR')}`;
 }
