@@ -7,8 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCreateAnnouncement, useUpdateAnnouncement } from '@/pages/announcements/hooks/use-announcements';
-import { useAuthStore } from '@/stores/auth-store';
-import type { Announcement } from '@/mocks/announcements';
+import { useRoleOptions } from '@/pages/employees/hooks/use-employees';
+import { roleLabel } from '@/types/auth';
+import type { Announcement } from '@/pages/announcements/api/announcements-api';
 
 interface AnnouncementFormDialogProps {
   open: boolean;
@@ -16,15 +17,15 @@ interface AnnouncementFormDialogProps {
   announcement?: Announcement;
 }
 
-const SCOPE_OPTIONS = ['전사', '영업팀', '생산팀', '인사팀', '경영지원팀'];
+const ALL_ROLES = 'ALL';
 
-const EMPTY_FORM = { title: '', content: '', scope: '전사', isPinned: false };
+const EMPTY_FORM = { title: '', content: '', targetRoleId: ALL_ROLES, isPinned: false };
 
 function AnnouncementFormDialog({ open, onOpenChange, announcement }: AnnouncementFormDialogProps) {
   const [form, setForm] = useState(EMPTY_FORM);
-  const user = useAuthStore((state) => state.user);
   const createAnnouncement = useCreateAnnouncement();
   const updateAnnouncement = useUpdateAnnouncement();
+  const { data: roles } = useRoleOptions();
   const isEdit = Boolean(announcement);
   const isSubmitting = createAnnouncement.isPending || updateAnnouncement.isPending;
 
@@ -32,7 +33,12 @@ function AnnouncementFormDialog({ open, onOpenChange, announcement }: Announceme
     if (open) {
       setForm(
         announcement
-          ? { title: announcement.title, content: announcement.content, scope: announcement.scope, isPinned: announcement.isPinned }
+          ? {
+              title: announcement.title,
+              content: announcement.content,
+              targetRoleId: announcement.targetRoleId ?? ALL_ROLES,
+              isPinned: announcement.isPinned,
+            }
           : EMPTY_FORM,
       );
     }
@@ -40,12 +46,17 @@ function AnnouncementFormDialog({ open, onOpenChange, announcement }: Announceme
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    const input = {
+      title: form.title,
+      content: form.content,
+      isPinned: form.isPinned,
+      targetRoleId: form.targetRoleId === ALL_ROLES ? undefined : form.targetRoleId,
+    };
     if (isEdit && announcement) {
-      updateAnnouncement.mutate({ id: announcement.id, input: form }, { onSuccess: () => onOpenChange(false) });
+      updateAnnouncement.mutate({ id: announcement.id, input }, { onSuccess: () => onOpenChange(false) });
       return;
     }
-    if (!user) return;
-    createAnnouncement.mutate({ ...form, authorId: user.id }, { onSuccess: () => onOpenChange(false) });
+    createAnnouncement.mutate(input, { onSuccess: () => onOpenChange(false) });
   };
 
   return (
@@ -67,14 +78,15 @@ function AnnouncementFormDialog({ open, onOpenChange, announcement }: Announceme
             <div className="flex items-center gap-4">
               <div className="flex flex-1 flex-col gap-1.5">
                 <Label>대상 범위</Label>
-                <Select value={form.scope} onValueChange={(scope) => setForm({ ...form, scope })}>
+                <Select value={form.targetRoleId} onValueChange={(targetRoleId) => setForm({ ...form, targetRoleId })}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SCOPE_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
+                    <SelectItem value={ALL_ROLES}>전사</SelectItem>
+                    {(roles ?? []).map((role) => (
+                      <SelectItem key={role.id} value={role.id}>
+                        {roleLabel(role.name)}
                       </SelectItem>
                     ))}
                   </SelectContent>

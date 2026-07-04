@@ -14,7 +14,9 @@ export class AnnouncementsService {
         OR: [{ targetRoleId: null }, { targetRoleId: requester.roleId }],
       },
       orderBy: [{ isPinned: 'desc' }, { publishedAt: 'desc' }],
+      include: { _count: { select: { reads: true } } },
     });
+
     const readIds = new Set(
       (
         await this.prisma.announcementRead.findMany({
@@ -23,18 +25,34 @@ export class AnnouncementsService {
         })
       ).map((r) => r.announcementId),
     );
-    return announcements.map((announcement) => ({
+
+    const targetRoleCounts = await this.countTargetRoles(
+      announcements.map((a) => a.targetRoleId),
+      requester.companyId,
+    );
+
+    return announcements.map(({ _count, ...announcement }) => ({
       ...announcement,
       isReadByMe: readIds.has(announcement.id),
+      readCount: _count.reads,
+      totalTargetCount: targetRoleCounts.get(announcement.targetRoleId) ?? 0,
     }));
   }
 
   async findOne(id: string, requester: AuthUser) {
     const announcement = await this.prisma.announcement.findFirst({
       where: { id, companyId: requester.companyId },
+      include: { _count: { select: { reads: true } } },
     });
     if (!announcement) throw new NotFoundException('공지사항을 찾을 수 없습니다.');
-    return announcement;
+
+    const { _count, ...rest } = announcement;
+    const targetRoleCounts = await this.countTargetRoles([announcement.targetRoleId], requester.companyId);
+    return {
+      ...rest,
+      readCount: _count.reads,
+      totalTargetCount: targetRoleCounts.get(announcement.targetRoleId) ?? 0,
+    };
   }
 
   create(dto: CreateAnnouncementDto, requester: AuthUser) {
@@ -62,5 +80,30 @@ export class AnnouncementsService {
       update: {},
     });
     return { success: true };
+  }
+
+  /** targetRoleId별 대상 인원 수(null=전사 인원 수)를 한 번에 계산해 N+1 쿼리를 피한다 */
+  private async countTargetRoles(
+    targetRoleIds: (string | null)[],
+    companyId: string,
+  ): Promise<Map<string | null, number>> {
+    const roleIds = [...new Set(targetRoleIds.filter((id): id is string => id !== null))];
+    const needsCompanyTotal = targetRoleIds.includes(null);
+
+    const [companyTotal, roleCounts] = await Promise.all([
+      needsCompanyTotal ? this.prisma.user.count({ where: { companyId } }) : Promise.resolve(0),
+      roleIds.length > 0
+        ? this.prisma.user.groupBy({
+            by: ['roleId'],
+            where: { companyId, roleId: { in: roleIds } },
+            _count: true,
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const map = new Map<string | null, number>();
+    if (needsCompanyTotal) map.set(null, companyTotal);
+    for (const row of roleCounts) map.set(row.roleId, row._count);
+    return map;
   }
 }

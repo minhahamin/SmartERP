@@ -1,61 +1,42 @@
-import { ANNOUNCEMENTS, type Announcement } from '@/mocks/announcements';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-export interface AnnouncementWithReadState extends Announcement {
-  isReadByMe: boolean;
-}
-
-let announcementDb: Announcement[] = [...ANNOUNCEMENTS];
-const readByCurrentSession = new Set<string>();
-
-export async function listAnnouncements(): Promise<AnnouncementWithReadState[]> {
-  await delay();
-  return [...announcementDb]
-    .sort((a, b) => {
-      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-      return a.publishedAt < b.publishedAt ? 1 : -1;
-    })
-    .map((a) => ({ ...a, isReadByMe: readByCurrentSession.has(a.id) }));
-}
-
-export interface CreateAnnouncementInput {
+export interface Announcement {
+  id: string;
   title: string;
   content: string;
-  scope: string;
+  category: string | null;
   isPinned: boolean;
+  targetRoleId: string | null;
   authorId: string;
+  publishedAt: string;
+  isReadByMe: boolean;
+  readCount: number;
+  totalTargetCount: number;
 }
 
-export async function createAnnouncement(input: CreateAnnouncementInput): Promise<Announcement> {
-  await delay(400);
-  const announcement: Announcement = {
-    id: `ann-${Date.now()}`,
-    readCount: 0,
-    totalTargetCount: 15,
-    publishedAt: '2026-06-19',
-    ...input,
-  };
-  announcementDb = [announcement, ...announcementDb];
-  return announcement;
+export async function listAnnouncements(): Promise<Announcement[]> {
+  const { data } = await apiClient.get<ApiSuccess<Announcement[]>>('/announcements');
+  return data.data;
 }
 
-export type UpdateAnnouncementInput = Pick<CreateAnnouncementInput, 'title' | 'content' | 'scope' | 'isPinned'>;
-
-export async function updateAnnouncement(id: string, input: UpdateAnnouncementInput): Promise<Announcement> {
-  await delay(400);
-  announcementDb = announcementDb.map((a) => (a.id === id ? { ...a, ...input } : a));
-  const updated = announcementDb.find((a) => a.id === id);
-  if (!updated) throw new Error('공지사항을 찾을 수 없습니다.');
-  return updated;
+export interface AnnouncementInput {
+  title: string;
+  content: string;
+  isPinned: boolean;
+  /** 비워두면 전사 공개 */
+  targetRoleId?: string;
 }
 
-export async function markAnnouncementRead(id: string): Promise<Announcement> {
-  await delay(150);
-  if (!readByCurrentSession.has(id)) {
-    readByCurrentSession.add(id);
-    announcementDb = announcementDb.map((a) => (a.id === id ? { ...a, readCount: Math.min(a.readCount + 1, a.totalTargetCount) } : a));
-  }
-  const updated = announcementDb.find((a) => a.id === id);
-  if (!updated) throw new Error('공지사항을 찾을 수 없습니다.');
-  return updated;
+export async function createAnnouncement(input: AnnouncementInput) {
+  const { data } = await apiClient.post<ApiSuccess<{ id: string }>>('/announcements', input);
+  return data.data;
+}
+
+export async function updateAnnouncement(id: string, input: AnnouncementInput) {
+  const { data } = await apiClient.patch<ApiSuccess<{ id: string }>>(`/announcements/${id}`, input);
+  return data.data;
+}
+
+export async function markAnnouncementRead(id: string): Promise<void> {
+  await apiClient.post(`/announcements/${id}/read`);
 }

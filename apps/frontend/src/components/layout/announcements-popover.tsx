@@ -4,19 +4,26 @@ import { Megaphone, Pin } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tag } from '@/components/ui/tag';
 import { useAnnouncements, useMarkAnnouncementRead } from '@/pages/announcements/hooks/use-announcements';
+import { useRoleOptions } from '@/pages/employees/hooks/use-employees';
+import { roleLabel } from '@/types/auth';
 import { ROUTES } from '@/config/routes';
 import { cn } from '@/lib/utils';
-import type { AnnouncementWithReadState } from '@/pages/announcements/api/announcements-api';
+import type { Announcement } from '@/pages/announcements/api/announcements-api';
 
 function AnnouncementsPopover() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { data: announcements } = useAnnouncements();
+  const { data: roles } = useRoleOptions();
   const markRead = useMarkAnnouncementRead();
   const unreadCount = announcements?.filter((a) => !a.isReadByMe).length ?? 0;
   const preview = announcements?.slice(0, 4) ?? [];
+  const scopeLabel = (announcement: Announcement) =>
+    announcement.targetRoleId
+      ? roleLabel(roles?.find((r) => r.id === announcement.targetRoleId)?.name ?? announcement.targetRoleId)
+      : '전사';
 
-  const handleClick = (announcement: AnnouncementWithReadState) => {
+  const handleClick = (announcement: Announcement) => {
     markRead.mutate(announcement.id);
     setOpen(false);
     navigate(ROUTES.announcements);
@@ -69,11 +76,11 @@ function AnnouncementsPopover() {
                 {announcement.isPinned ? <Pin className="mt-0.5 size-3.5 shrink-0 fill-primary text-primary" /> : <span className="mt-0.5 size-3.5 shrink-0" />}
                 <span className="flex-1">
                   <span className="flex items-center gap-1.5">
-                    <Tag className="shrink-0">{announcement.scope}</Tag>
+                    <Tag className="shrink-0">{scopeLabel(announcement)}</Tag>
                     {!announcement.isReadByMe && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
                   </span>
                   <span className="mt-1 block truncate text-sm font-medium text-foreground">{announcement.title}</span>
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground/70">{announcement.publishedAt}</span>
+                  <span className="mt-0.5 block text-[11px] text-muted-foreground/70">{announcement.publishedAt.slice(0, 10)}</span>
                 </span>
               </button>
             ))

@@ -8,8 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AnnouncementFormDialog } from '@/pages/announcements/components/announcement-form-dialog';
 import { AnnouncementDetailDrawer } from '@/pages/announcements/components/announcement-detail-drawer';
 import { useAnnouncements } from '@/pages/announcements/hooks/use-announcements';
-import { getEmployeeById } from '@/mocks/employees';
-import type { Announcement } from '@/mocks/announcements';
+import { useEmployees, useRoleOptions } from '@/pages/employees/hooks/use-employees';
+import { roleLabel } from '@/types/auth';
+import type { Announcement } from '@/pages/announcements/api/announcements-api';
 
 function AnnouncementsPage() {
   const { data: announcements, isLoading } = useAnnouncements();
@@ -75,6 +76,13 @@ function AnnouncementsPage() {
 }
 
 function AnnouncementRow({ announcement, onClick }: { announcement: Announcement; onClick: () => void }) {
+  const { data: employees } = useEmployees({ status: 'ACTIVE', page: 1, limit: 100 });
+  const { data: roles } = useRoleOptions();
+  const authorName = employees?.items.find((e) => e.id === announcement.authorId)?.name ?? '-';
+  const scopeLabel = announcement.targetRoleId
+    ? roleLabel(roles?.find((r) => r.id === announcement.targetRoleId)?.name ?? announcement.targetRoleId)
+    : '전사';
+
   return (
     <button
       type="button"
@@ -82,14 +90,14 @@ function AnnouncementRow({ announcement, onClick }: { announcement: Announcement
       className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left last:border-0 hover:bg-gray-50"
     >
       {announcement.isPinned ? <Pin className="size-3.5 shrink-0 fill-primary text-primary" /> : <span className="size-3.5 shrink-0" />}
-      <Tag className="shrink-0">{announcement.scope}</Tag>
+      <Tag className="shrink-0">{scopeLabel}</Tag>
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{announcement.title}</span>
       <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:flex">
         <Users className="size-3 shrink-0" />
         {announcement.readCount}/{announcement.totalTargetCount}
       </span>
-      <span className="shrink-0 text-xs text-muted-foreground">{getEmployeeById(announcement.authorId)?.name}</span>
-      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{announcement.publishedAt.slice(5)}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">{authorName}</span>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{announcement.publishedAt.slice(5, 10)}</span>
     </button>
   );
 }
