@@ -1,12 +1,12 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCreateProductionOrder } from '@/pages/production/hooks/use-production';
-import { PRODUCTS } from '@/mocks/products';
-import { useAuthStore } from '@/stores/auth-store';
+import { useProducts } from '@/pages/products/hooks/use-products';
+import { useWarehouses } from '@/pages/inventory/hooks/use-warehouses';
 
 interface ProductionFormDialogProps {
   open: boolean;
@@ -16,19 +16,34 @@ interface ProductionFormDialogProps {
 const LINES = ['1라인', '2라인'];
 
 function ProductionFormDialog({ open, onOpenChange }: ProductionFormDialogProps) {
-  const [productId, setProductId] = useState(PRODUCTS[0].id);
+  const [productId, setProductId] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
   const [plannedQty, setPlannedQty] = useState(100);
   const [lineName, setLineName] = useState(LINES[0]);
-  const [startDate, setStartDate] = useState('2026-06-22');
-  const [dueDate, setDueDate] = useState('2026-06-29');
-  const user = useAuthStore((state) => state.user);
+  const [startDate, setStartDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const createOrder = useCreateProductionOrder();
+  const { data: products } = useProducts({});
+  const { data: warehouses } = useWarehouses();
+
+  useEffect(() => {
+    if (!open) return;
+    if (!productId && products && products.length > 0) setProductId(products[0].id);
+    if (!warehouseId && warehouses && warehouses.length > 0) setWarehouseId(warehouses[0].id);
+    if (!startDate || !dueDate) {
+      const today = new Date();
+      const due = new Date(today);
+      due.setDate(due.getDate() + 7);
+      setStartDate(today.toISOString().slice(0, 10));
+      setDueDate(due.toISOString().slice(0, 10));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, products, warehouses]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!user) return;
     createOrder.mutate(
-      { productId, plannedQty, lineName, startDate, dueDate, managerId: user.id },
+      { productId, plannedQty, lineName, startDate, dueDate, warehouseId },
       { onSuccess: () => onOpenChange(false) },
     );
   };
@@ -49,7 +64,7 @@ function ProductionFormDialog({ open, onOpenChange }: ProductionFormDialogProps)
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PRODUCTS.map((p) => (
+                    {(products ?? []).map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
                       </SelectItem>
@@ -71,6 +86,21 @@ function ProductionFormDialog({ open, onOpenChange }: ProductionFormDialogProps)
                     {LINES.map((line) => (
                       <SelectItem key={line} value={line}>
                         {line}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label>완료 시 입고 창고</Label>
+                <Select value={warehouseId} onValueChange={setWarehouseId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(warehouses ?? []).map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

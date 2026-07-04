@@ -1,11 +1,13 @@
+import axios from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ApiError } from '@/lib/api/client';
 import {
   createProductionOrder,
   listProductionOrders,
   updateProductionStatus,
   type CreateProductionOrderInput,
+  type ProductionStatus,
 } from '@/pages/production/api/production-api';
-import type { ProductionStatus } from '@/mocks/production-orders';
 import { toast } from '@/stores/toast-store';
 
 const PRODUCTION_KEY = ['production-orders'] as const;
@@ -37,6 +39,10 @@ export function useUpdateProductionStatus() {
       } else {
         toast({ title: '상태가 변경되었습니다.', variant: 'success' });
       }
+    },
+    onError: (error: unknown) => {
+      const message = axios.isAxiosError<ApiError>(error) ? (error.response?.data.error.message ?? error.message) : '상태 변경에 실패했습니다.';
+      toast({ title: message, variant: 'destructive' });
     },
   });
 }

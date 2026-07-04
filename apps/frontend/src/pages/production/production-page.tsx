@@ -7,7 +7,7 @@ import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { ProductionOrderCard } from '@/pages/production/components/production-order-card';
 import { ProductionFormDialog } from '@/pages/production/components/production-form-dialog';
 import { useProductionOrders, useUpdateProductionStatus } from '@/pages/production/hooks/use-production';
-import type { ProductionOrder, ProductionStatus } from '@/mocks/production-orders';
+import type { ProductionOrder, ProductionStatus } from '@/pages/production/api/production-api';
 
 const COLUMNS: { status: ProductionStatus; label: string }[] = [
   { status: 'PLANNED', label: '계획' },

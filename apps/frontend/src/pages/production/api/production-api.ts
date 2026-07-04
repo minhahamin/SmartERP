@@ -1,50 +1,78 @@
-import { PRODUCTION_ORDERS, type ProductionOrder, type ProductionStatus } from '@/mocks/production-orders';
-import { adjustQuantity } from '@/mocks/inventory-store';
-import { getWarehouses } from '@/mocks/warehouse-store';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-let productionDb: ProductionOrder[] = [...PRODUCTION_ORDERS];
+export type ProductionStatus = 'PLANNED' | 'IN_PROGRESS' | 'DELAYED' | 'COMPLETED' | 'CANCELLED';
+
+export interface ProductionOrder {
+  id: string;
+  orderNo: string;
+  productId: string;
+  productName: string;
+  unit: string;
+  plannedQty: number;
+  producedQty: number;
+  status: ProductionStatus;
+  lineName: string | null;
+  startDate: string;
+  dueDate: string;
+  managerId: string | null;
+  warehouseId: string | null;
+}
+
+interface RawProductionOrder {
+  id: string;
+  orderNo: string;
+  productId: string;
+  plannedQty: number;
+  producedQty: number;
+  status: ProductionStatus;
+  lineName: string | null;
+  startDate: string;
+  dueDate: string;
+  managerId: string | null;
+  warehouseId: string | null;
+  product: { name: string; unit: string };
+}
+
+function toProductionOrder(raw: RawProductionOrder): ProductionOrder {
+  return {
+    id: raw.id,
+    orderNo: raw.orderNo,
+    productId: raw.productId,
+    productName: raw.product.name,
+    unit: raw.product.unit,
+    plannedQty: raw.plannedQty,
+    producedQty: raw.producedQty,
+    status: raw.status,
+    lineName: raw.lineName,
+    startDate: raw.startDate,
+    dueDate: raw.dueDate,
+    managerId: raw.managerId,
+    warehouseId: raw.warehouseId,
+  };
+}
+
+export async function listProductionOrders(): Promise<ProductionOrder[]> {
+  const { data } = await apiClient.get<ApiSuccess<RawProductionOrder[]>>('/production-orders', {
+    params: { page: 1, limit: 100 },
+  });
+  return data.data.map(toProductionOrder);
+}
 
 export interface CreateProductionOrderInput {
   productId: string;
   plannedQty: number;
-  lineName: string;
+  lineName?: string;
   startDate: string;
   dueDate: string;
-  managerId: string;
+  warehouseId: string;
 }
 
-export async function listProductionOrders(): Promise<ProductionOrder[]> {
-  await delay();
-  return productionDb;
+export async function createProductionOrder(input: CreateProductionOrderInput) {
+  const { data } = await apiClient.post<ApiSuccess<{ id: string }>>('/production-orders', input);
+  return data.data;
 }
 
-export async function createProductionOrder(input: CreateProductionOrderInput): Promise<ProductionOrder> {
-  await delay(400);
-  const order: ProductionOrder = {
-    id: `po-${Date.now()}`,
-    orderNo: `PO-2026-${String(productionDb.length + 20).padStart(3, '0')}`,
-    producedQty: 0,
-    status: 'PLANNED',
-    ...input,
-  };
-  productionDb = [...productionDb, order];
-  return order;
-}
-
-export async function updateProductionStatus(id: string, status: ProductionStatus): Promise<ProductionOrder> {
-  await delay(400);
-  productionDb = productionDb.map((p) => {
-    if (p.id !== id) return p;
-    const producedQty = status === 'COMPLETED' ? p.plannedQty : p.producedQty;
-    return { ...p, status, producedQty };
-  });
-  const updated = productionDb.find((p) => p.id === id);
-  if (!updated) throw new Error('생산 오더를 찾을 수 없습니다.');
-
-  if (status === 'COMPLETED') {
-    const defaultWarehouseId = getWarehouses()[0]?.id;
-    if (defaultWarehouseId) adjustQuantity(updated.productId, defaultWarehouseId, updated.plannedQty);
-  }
-  return updated;
+export async function updateProductionStatus(id: string, status: ProductionStatus) {
+  const { data } = await apiClient.patch<ApiSuccess<{ id: string }>>(`/production-orders/${id}/status`, { status });
+  return data.data;
 }
