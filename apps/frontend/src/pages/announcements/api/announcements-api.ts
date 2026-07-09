@@ -7,6 +7,8 @@ export interface Announcement {
   category: string | null;
   isPinned: boolean;
   targetRoleId: string | null;
+  /** targetRoleId를 서버가 미리 이름으로 풀어서 내려준다(PERMISSION:READ 없는 일반 직원도 표시 가능하도록) */
+  targetRoleName: string | null;
   authorId: string;
   publishedAt: string;
   isReadByMe: boolean;

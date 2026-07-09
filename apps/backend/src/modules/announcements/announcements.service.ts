@@ -26,16 +26,18 @@ export class AnnouncementsService {
       ).map((r) => r.announcementId),
     );
 
-    const targetRoleCounts = await this.countTargetRoles(
-      announcements.map((a) => a.targetRoleId),
-      requester.companyId,
-    );
+    const targetRoleIds = announcements.map((a) => a.targetRoleId);
+    const [targetRoleCounts, roleNames] = await Promise.all([
+      this.countTargetRoles(targetRoleIds, requester.companyId),
+      this.resolveRoleNames(targetRoleIds),
+    ]);
 
     return announcements.map(({ _count, ...announcement }) => ({
       ...announcement,
       isReadByMe: readIds.has(announcement.id),
       readCount: _count.reads,
       totalTargetCount: targetRoleCounts.get(announcement.targetRoleId) ?? 0,
+      targetRoleName: announcement.targetRoleId ? (roleNames.get(announcement.targetRoleId) ?? null) : null,
     }));
   }
 
@@ -47,11 +49,15 @@ export class AnnouncementsService {
     if (!announcement) throw new NotFoundException('공지사항을 찾을 수 없습니다.');
 
     const { _count, ...rest } = announcement;
-    const targetRoleCounts = await this.countTargetRoles([announcement.targetRoleId], requester.companyId);
+    const [targetRoleCounts, roleNames] = await Promise.all([
+      this.countTargetRoles([announcement.targetRoleId], requester.companyId),
+      this.resolveRoleNames([announcement.targetRoleId]),
+    ]);
     return {
       ...rest,
       readCount: _count.reads,
       totalTargetCount: targetRoleCounts.get(announcement.targetRoleId) ?? 0,
+      targetRoleName: announcement.targetRoleId ? (roleNames.get(announcement.targetRoleId) ?? null) : null,
     };
   }
 
@@ -105,5 +111,21 @@ export class AnnouncementsService {
     if (needsCompanyTotal) map.set(null, companyTotal);
     for (const row of roleCounts) map.set(row.roleId, row._count);
     return map;
+  }
+
+  /**
+   * targetRoleId(UUID) → 역할 이름(Role.name) 매핑을 서버에서 미리 만들어 응답에 실어 보낸다.
+   * `GET /roles`는 PERMISSION:READ가 있는 관리자/인사담당자만 호출할 수 있는데, 공지사항은
+   * 전 직원이 보는 화면이라 프론트가 그 API로 역할 이름을 직접 조회할 수 없다(EMPLOYEE는 403).
+   */
+  private async resolveRoleNames(targetRoleIds: (string | null)[]): Promise<Map<string, string>> {
+    const roleIds = [...new Set(targetRoleIds.filter((id): id is string => id !== null))];
+    if (roleIds.length === 0) return new Map();
+
+    const roles = await this.prisma.role.findMany({
+      where: { id: { in: roleIds } },
+      select: { id: true, name: true },
+    });
+    return new Map(roles.map((r) => [r.id, r.name]));
   }
 }

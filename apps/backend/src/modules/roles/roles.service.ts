@@ -11,6 +11,14 @@ export class RolesService {
     return this.prisma.permission.findMany({ orderBy: [{ resource: 'asc' }, { action: 'asc' }] });
   }
 
+  findOptions(requester: AuthUser) {
+    return this.prisma.role.findMany({
+      where: { companyId: requester.companyId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   findAll(requester: AuthUser) {
     return this.prisma.role.findMany({
       where: { companyId: requester.companyId },

@@ -21,6 +21,16 @@ export class RolesController {
     return this.rolesService.findAllPermissions();
   }
 
+  /**
+   * 공지사항 대상 역할 표시/선택처럼 "역할 이름"만 필요한 화면은 전 직원이 접근하므로,
+   * 권한 매트릭스 전체를 담은 findAll()(PERMISSION:READ 필요)과 분리해 인증만 요구한다.
+   */
+  @Get('options')
+  @ApiOperation({ summary: '역할 이름 옵션 목록(권한 정보 없이 id/name만)' })
+  findOptions(@CurrentUser() user: AuthUser) {
+    return this.rolesService.findOptions(user);
+  }
+
   @Get()
   @RequirePermissions('PERMISSION', 'READ')
   @ApiOperation({ summary: '역할 목록(보유 권한 포함)' })

@@ -95,8 +95,8 @@ export async function listDepartmentOptions(): Promise<DepartmentOption[]> {
   return data.data;
 }
 
-/** 직원 등록/수정 폼의 권한(Role) 선택 옵션 */
+/** 직원 등록/수정 폼·공지사항 대상 선택 등에 쓰이는 역할 이름 옵션(권한 정보 없이 id/name만, 전 직원 접근 가능) */
 export async function listRoleOptions(): Promise<RoleOption[]> {
-  const { data } = await apiClient.get<ApiSuccess<RoleOption[]>>('/roles');
+  const { data } = await apiClient.get<ApiSuccess<RoleOption[]>>('/roles/options');
   return data.data;
 }

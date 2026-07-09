@@ -4,7 +4,6 @@ import { Megaphone, Pin } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tag } from '@/components/ui/tag';
 import { useAnnouncements, useMarkAnnouncementRead } from '@/pages/announcements/hooks/use-announcements';
-import { useRoleOptions } from '@/pages/employees/hooks/use-employees';
 import { roleLabel } from '@/types/auth';
 import { ROUTES } from '@/config/routes';
 import { cn } from '@/lib/utils';
@@ -14,14 +13,11 @@ function AnnouncementsPopover() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { data: announcements } = useAnnouncements();
-  const { data: roles } = useRoleOptions();
   const markRead = useMarkAnnouncementRead();
   const unreadCount = announcements?.filter((a) => !a.isReadByMe).length ?? 0;
   const preview = announcements?.slice(0, 4) ?? [];
   const scopeLabel = (announcement: Announcement) =>
-    announcement.targetRoleId
-      ? roleLabel(roles?.find((r) => r.id === announcement.targetRoleId)?.name ?? announcement.targetRoleId)
-      : '전사';
+    announcement.targetRoleName ? roleLabel(announcement.targetRoleName) : '전사';
 
   const handleClick = (announcement: Announcement) => {
     markRead.mutate(announcement.id);

@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AnnouncementFormDialog } from '@/pages/announcements/components/announcement-form-dialog';
 import { AnnouncementDetailDrawer } from '@/pages/announcements/components/announcement-detail-drawer';
 import { useAnnouncements } from '@/pages/announcements/hooks/use-announcements';
-import { useEmployees, useRoleOptions } from '@/pages/employees/hooks/use-employees';
+import { useEmployees } from '@/pages/employees/hooks/use-employees';
 import { roleLabel } from '@/types/auth';
 import type { Announcement } from '@/pages/announcements/api/announcements-api';
 
@@ -77,11 +77,8 @@ function AnnouncementsPage() {
 
 function AnnouncementRow({ announcement, onClick }: { announcement: Announcement; onClick: () => void }) {
   const { data: employees } = useEmployees({ status: 'ACTIVE', page: 1, limit: 100 });
-  const { data: roles } = useRoleOptions();
   const authorName = employees?.items.find((e) => e.id === announcement.authorId)?.name ?? '-';
-  const scopeLabel = announcement.targetRoleId
-    ? roleLabel(roles?.find((r) => r.id === announcement.targetRoleId)?.name ?? announcement.targetRoleId)
-    : '전사';
+  const scopeLabel = announcement.targetRoleName ? roleLabel(announcement.targetRoleName) : '전사';
 
   return (
     <button

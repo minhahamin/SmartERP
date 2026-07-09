@@ -3,7 +3,7 @@ import { Pencil, Pin, Users } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Tag } from '@/components/ui/tag';
-import { useEmployees, useRoleOptions } from '@/pages/employees/hooks/use-employees';
+import { useEmployees } from '@/pages/employees/hooks/use-employees';
 import { useMarkAnnouncementRead } from '@/pages/announcements/hooks/use-announcements';
 import { roleLabel } from '@/types/auth';
 import type { Announcement } from '@/pages/announcements/api/announcements-api';
@@ -17,7 +17,6 @@ interface AnnouncementDetailDrawerProps {
 function AnnouncementDetailDrawer({ announcement, onOpenChange, onEdit }: AnnouncementDetailDrawerProps) {
   const markRead = useMarkAnnouncementRead();
   const { data: employees } = useEmployees({ status: 'ACTIVE', page: 1, limit: 100 });
-  const { data: roles } = useRoleOptions();
 
   useEffect(() => {
     if (announcement) markRead.mutate(announcement.id);
@@ -27,9 +26,7 @@ function AnnouncementDetailDrawer({ announcement, onOpenChange, onEdit }: Announ
   if (!announcement) return null;
 
   const authorName = employees?.items.find((e) => e.id === announcement.authorId)?.name ?? '-';
-  const scopeLabel = announcement.targetRoleId
-    ? roleLabel(roles?.find((r) => r.id === announcement.targetRoleId)?.name ?? announcement.targetRoleId)
-    : '전사';
+  const scopeLabel = announcement.targetRoleName ? roleLabel(announcement.targetRoleName) : '전사';
 
   return (
     <Sheet open={Boolean(announcement)} onOpenChange={onOpenChange}>
