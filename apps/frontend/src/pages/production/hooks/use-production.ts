@@ -6,14 +6,15 @@ import {
   listProductionOrders,
   updateProductionStatus,
   type CreateProductionOrderInput,
+  type ProductionOrderListQuery,
   type ProductionStatus,
 } from '@/pages/production/api/production-api';
 import { toast } from '@/stores/toast-store';
 
 const PRODUCTION_KEY = ['production-orders'] as const;
 
-export function useProductionOrders() {
-  return useQuery({ queryKey: PRODUCTION_KEY, queryFn: listProductionOrders });
+export function useProductionOrders(query: ProductionOrderListQuery = {}) {
+  return useQuery({ queryKey: [...PRODUCTION_KEY, query], queryFn: () => listProductionOrders(query) });
 }
 
 export function useCreateProductionOrder() {

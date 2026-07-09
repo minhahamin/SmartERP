@@ -51,9 +51,13 @@ function toProductionOrder(raw: RawProductionOrder): ProductionOrder {
   };
 }
 
-export async function listProductionOrders(): Promise<ProductionOrder[]> {
+export interface ProductionOrderListQuery {
+  productId?: string;
+}
+
+export async function listProductionOrders(query: ProductionOrderListQuery = {}): Promise<ProductionOrder[]> {
   const { data } = await apiClient.get<ApiSuccess<RawProductionOrder[]>>('/production-orders', {
-    params: { page: 1, limit: 100 },
+    params: { productId: query.productId, page: 1, limit: 100 },
   });
   return data.data.map(toProductionOrder);
 }

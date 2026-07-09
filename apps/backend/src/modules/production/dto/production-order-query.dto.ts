@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { ProductionStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
@@ -10,6 +10,11 @@ export class ProductionOrderQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(ProductionStatus)
   status?: ProductionStatus;
+
+  @ApiPropertyOptional({ description: '제품 상세 화면의 생산이력 탭에서 사용' })
+  @IsOptional()
+  @IsUUID()
+  productId?: string;
 
   @ApiPropertyOptional({
     description: 'true면 완료/취소되지 않았고 dueDate가 지난 오더만 조회 (docs/07 7.5 인덱스 목적)',

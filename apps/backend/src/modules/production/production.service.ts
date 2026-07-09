@@ -21,6 +21,7 @@ export class ProductionService {
     const where: Record<string, unknown> = { companyId: requester.companyId };
     if (requester.roleName === 'EMPLOYEE') where.managerId = requester.sub;
     if (query.status) where.status = query.status;
+    if (query.productId) where.productId = query.productId;
     if (query.delayed) {
       where.status = { notIn: ['COMPLETED', 'CANCELLED'] };
       where.dueDate = { lt: new Date() };
