@@ -26,6 +26,7 @@ import { StockMovementsModule } from './modules/stock-movements/stock-movements.
 import { ProductionModule } from './modules/production/production.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { RagModule } from './modules/rag/rag.module';
 import { AiChatModule } from './modules/ai-chat/ai-chat.module';
@@ -54,6 +55,7 @@ import { SearchModule } from './modules/search/search.module';
     ProductionModule,
     DocumentsModule,
     AnnouncementsModule,
+    NotificationsModule,
     StatisticsModule,
     RagModule,
     AiChatModule,

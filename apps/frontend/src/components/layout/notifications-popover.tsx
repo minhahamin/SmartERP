@@ -4,8 +4,8 @@ import { AlertTriangle, Bell, CalendarClock, CalendarDays, Factory, Wallet } fro
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useNotificationsStore } from '@/stores/notifications-store';
-import type { AppNotification, NotificationType } from '@/mocks/notifications';
+import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from '@/components/layout/use-notifications';
+import type { AppNotification, NotificationType } from '@/components/layout/notifications-api';
 
 const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   INVENTORY: AlertTriangle,
@@ -24,9 +24,9 @@ const TYPE_ICON_CLASS: Record<NotificationType, string> = {
 };
 
 function formatRelativeDate(iso: string) {
-  const today = new Date('2026-06-19T23:59:59');
+  const now = new Date();
   const date = new Date(iso);
-  const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays <= 0) return `오늘 ${iso.slice(11, 16)}`;
   if (diffDays === 1) return '1일 전';
   return `${diffDays}일 전`;
@@ -35,13 +35,16 @@ function formatRelativeDate(iso: string) {
 function NotificationsPopover() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const { notifications, markAsRead, markAllAsRead } = useNotificationsStore();
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const { data: notifications } = useNotifications();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+  const list = notifications ?? [];
+  const unreadCount = list.filter((n) => !n.isRead).length;
 
   const handleClick = (notification: AppNotification) => {
-    markAsRead(notification.id);
+    if (!notification.isRead) markRead.mutate(notification.id);
     setOpen(false);
-    navigate(notification.link);
+    if (notification.link) navigate(notification.link);
   };
 
   return (
@@ -64,16 +67,21 @@ function NotificationsPopover() {
         <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
           <span className="text-sm font-semibold text-foreground">알림</span>
           {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" className="h-auto px-1.5 py-0.5 text-xs" onClick={() => markAllAsRead()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto px-1.5 py-0.5 text-xs"
+              onClick={() => markAllRead.mutate()}
+            >
               모두 읽음
             </Button>
           )}
         </div>
         <div className="flex max-h-80 flex-col overflow-y-auto">
-          {notifications.length === 0 ? (
+          {list.length === 0 ? (
             <p className="px-3 py-8 text-center text-xs text-muted-foreground">알림이 없습니다.</p>
           ) : (
-            notifications.map((notification) => {
+            list.map((notification) => {
               const Icon = TYPE_ICON[notification.type];
               return (
                 <button
