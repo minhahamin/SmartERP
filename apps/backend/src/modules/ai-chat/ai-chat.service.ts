@@ -60,6 +60,13 @@ export class AiChatService {
     return this.prisma.chatMessage.findMany({ where: { sessionId }, orderBy: { createdAt: 'asc' } });
   }
 
+  /** ChatMessage는 ChatSession에 onDelete: Cascade로 걸려있어 메시지도 함께 삭제된다 */
+  async deleteSession(sessionId: string, requester: AuthUser) {
+    await this.assertOwnSession(sessionId, requester);
+    await this.prisma.chatSession.delete({ where: { id: sessionId } });
+    return { success: true };
+  }
+
   async sendMessage(sessionId: string, dto: SendMessageDto, requester: AuthUser) {
     const session = await this.assertOwnSession(sessionId, requester);
     await this.prisma.chatMessage.create({ data: { sessionId, role: 'USER', content: dto.content } });

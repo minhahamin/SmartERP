@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
@@ -27,6 +27,12 @@ export class AiChatController {
   @ApiOperation({ summary: '새 세션 생성' })
   createSession(@Body('title') title: string | undefined, @CurrentUser() user: AuthUser) {
     return this.aiChatService.createSession(user.sub, title);
+  }
+
+  @Delete('sessions/:id')
+  @ApiOperation({ summary: '대화 세션 삭제(본인 세션만)' })
+  deleteSession(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.aiChatService.deleteSession(id, user);
   }
 
   @Get('sessions/:id/messages')

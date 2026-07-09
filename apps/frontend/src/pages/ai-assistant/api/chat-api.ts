@@ -11,6 +11,10 @@ export async function createChatSession(): Promise<ChatSession> {
   return data.data;
 }
 
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  await apiClient.delete(`/ai/sessions/${sessionId}`);
+}
+
 export async function listChatMessages(sessionId: string): Promise<ChatMessage[]> {
   const { data } = await apiClient.get<ApiSuccess<ChatMessage[]>>(`/ai/sessions/${sessionId}/messages`);
   return data.data;

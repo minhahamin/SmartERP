@@ -41,7 +41,13 @@ function AiAssistantPage() {
 
       <Card className="flex flex-1 overflow-hidden p-0">
         <div className="w-56 shrink-0">
-          <ChatSidebar selectedSessionId={selectedSessionId} onSelectSession={setSelectedSessionId} />
+          <ChatSidebar
+            selectedSessionId={selectedSessionId}
+            onSelectSession={setSelectedSessionId}
+            onSessionDeleted={(id) => {
+              if (selectedSessionId === id) setSelectedSessionId(null);
+            }}
+          />
         </div>
 
         <div className="flex flex-1 flex-col">
