@@ -33,8 +33,12 @@ interface RawAttendance {
   leave?: AttendanceLeaveOverlay | null;
 }
 
+/** 한국 표준시는 DST 없이 UTC+9로 고정 — 백엔드 attendance.service.ts의 todayDateOnly()와 동일한 기준을 써야
+ * 자정 근처(KST 00:00~09:00)에 "오늘" 날짜가 서버/클라이언트에서 어긋나지 않는다(브라우저 로컬 타임존과도 무관). */
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 export function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 function toTimeString(iso: string | null): string | null {
