@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Pencil, Phone } from 'lucide-react';
+import { CalendarDays, List, Mail, Pencil, Phone } from 'lucide-react';
 import { PageHeader } from '@/components/common/page-header';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,16 +9,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmployeeStatusBadge } from '@/pages/employees/components/employee-status-badge';
 import { MyProfileEditDialog } from '@/pages/profile/components/my-profile-edit-dialog';
 import { AttendanceHistoryTable } from '@/components/common/attendance-history-table';
+import { AttendanceCalendar } from '@/components/common/attendance-calendar';
 import { AttendanceCheckInCard } from '@/components/common/attendance-check-in-card';
 import { PayrollHistoryTable } from '@/components/common/payroll-history-table';
 import { LeaveSummary } from '@/components/common/leave-summary';
 import { useEmployee } from '@/pages/employees/hooks/use-employees';
 import { useAuthStore } from '@/stores/auth-store';
 import { roleLabel } from '@/types/auth';
+import { cn } from '@/lib/utils';
 
 function MyProfilePage() {
   const currentUserId = useAuthStore((state) => state.user?.id);
   const [editOpen, setEditOpen] = useState(false);
+  const [attendanceView, setAttendanceView] = useState<'list' | 'calendar'>('list');
   const { data: employee, isLoading } = useEmployee(currentUserId);
 
   if (isLoading || !employee) {
@@ -88,7 +91,37 @@ function MyProfilePage() {
 
             <TabsContent value="attendance" className="px-5 py-5">
               <AttendanceCheckInCard employeeId={employee.id} />
-              <AttendanceHistoryTable employeeId={employee.id} />
+              <div className="mb-3 flex justify-end">
+                <div className="flex items-center rounded-md border border-border p-0.5">
+                  <button
+                    type="button"
+                    aria-label="목록으로 보기"
+                    onClick={() => setAttendanceView('list')}
+                    className={cn(
+                      'flex size-7 items-center justify-center rounded-sm',
+                      attendanceView === 'list' ? 'bg-secondary' : 'text-muted-foreground',
+                    )}
+                  >
+                    <List className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="달력으로 보기"
+                    onClick={() => setAttendanceView('calendar')}
+                    className={cn(
+                      'flex size-7 items-center justify-center rounded-sm',
+                      attendanceView === 'calendar' ? 'bg-secondary' : 'text-muted-foreground',
+                    )}
+                  >
+                    <CalendarDays className="size-4" />
+                  </button>
+                </div>
+              </div>
+              {attendanceView === 'list' ? (
+                <AttendanceHistoryTable employeeId={employee.id} />
+              ) : (
+                <AttendanceCalendar employeeId={employee.id} />
+              )}
             </TabsContent>
 
             <TabsContent value="payroll" className="px-5 py-5">
