@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAttendance } from '@/pages/profile/hooks/use-attendance';
-import type { AttendanceStatus } from '@/mocks/attendance';
+import type { AttendanceStatus } from '@/pages/profile/api/attendance-api';
 
 const ATTENDANCE_LABEL: Record<AttendanceStatus, string> = {
   NORMAL: '정상',

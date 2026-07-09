@@ -13,4 +13,9 @@ export class LeaveQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   departmentId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
 }

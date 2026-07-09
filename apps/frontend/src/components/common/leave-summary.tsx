@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/common/empty-state';
 import { LeaveRequestDialog } from '@/components/common/leave-request-dialog';
-import { useLeaveRequests } from '@/pages/profile/hooks/use-leave';
-import { getLeaveBalance, LEAVE_TYPE_LABEL } from '@/mocks/leave';
+import { useLeaveBalance, useLeaveRequests } from '@/pages/profile/hooks/use-leave';
+import { LEAVE_TYPE_LABEL } from '@/pages/profile/api/leave-api';
 
 const LEAVE_STATUS_LABEL: Record<string, string> = { PENDING: '승인대기', APPROVED: '승인', REJECTED: '반려' };
 
@@ -18,25 +18,33 @@ interface LeaveSummaryProps {
 
 function LeaveSummary({ employeeId, allowSubmit = false }: LeaveSummaryProps) {
   const [requestOpen, setRequestOpen] = useState(false);
-  const balance = getLeaveBalance(employeeId);
+  const { data: balance, isLoading: balanceLoading } = useLeaveBalance(employeeId);
   const { data: leaveRequests, isLoading } = useLeaveRequests(employeeId);
 
   return (
     <div>
-      <div className="mb-4 grid grid-cols-3 gap-3">
-        <div className="rounded-md border border-border p-3 text-center">
-          <p className="text-xs text-muted-foreground">총 연차</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{balance.total}일</p>
+      <p className="mb-3 text-xs text-muted-foreground">
+        연차는 근로기준법 제60조에 따라 근속연수를 기준으로 자동 산정됩니다(1년 미만: 매월 개근 시 1일, 최대 11일 · 1년 이상: 15일 + 최초
+        1년 초과 매 2년마다 1일 가산, 최대 25일).
+      </p>
+      {balanceLoading || !balance ? (
+        <Skeleton className="mb-4 h-20" />
+      ) : (
+        <div className="mb-4 grid grid-cols-3 gap-3">
+          <div className="rounded-md border border-border p-3 text-center">
+            <p className="text-xs text-muted-foreground">발생 연차</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{balance.totalDays}일</p>
+          </div>
+          <div className="rounded-md border border-border p-3 text-center">
+            <p className="text-xs text-muted-foreground">사용</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{balance.usedDays}일</p>
+          </div>
+          <div className="rounded-md border border-border p-3 text-center">
+            <p className="text-xs text-muted-foreground">잔여</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-primary">{balance.remainingDays}일</p>
+          </div>
         </div>
-        <div className="rounded-md border border-border p-3 text-center">
-          <p className="text-xs text-muted-foreground">사용</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{balance.used}일</p>
-        </div>
-        <div className="rounded-md border border-border p-3 text-center">
-          <p className="text-xs text-muted-foreground">잔여</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-primary">{balance.remaining}일</p>
-        </div>
-      </div>
+      )}
 
       {allowSubmit && (
         <div className="mb-3 flex justify-end">

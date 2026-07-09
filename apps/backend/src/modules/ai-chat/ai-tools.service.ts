@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { FunctionDeclaration } from '@google/genai';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LeaveService } from '../leave/leave.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
 interface ToolDefinition {
@@ -23,7 +24,10 @@ function asString(value: unknown): string {
  */
 @Injectable()
 export class AiToolsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaveService: LeaveService,
+  ) {}
 
   private readonly tools: ToolDefinition[] = [
     {
@@ -464,11 +468,7 @@ export class AiToolsService {
     if (!employee) return { found: false, message: '해당 직원을 찾지 못했습니다.' };
 
     const year = new Date().getFullYear();
-    const balance = await this.prisma.leaveBalance.findUnique({
-      where: { userId_year: { userId: employee.id, year } },
-    });
-    if (!balance)
-      return { found: true, employeeName: employee.name, message: `${year}년 연차 데이터가 없습니다.` };
+    const balance = await this.leaveService.findBalance(employee.id, year);
     return {
       found: true,
       employeeName: employee.name,

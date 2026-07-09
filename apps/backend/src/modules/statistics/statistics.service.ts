@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LeaveService } from '../leave/leave.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
 export interface ChartPoint {
@@ -20,7 +21,10 @@ const ROLE_ORDER = ['ADMIN', 'HR_MANAGER', 'SALES_MANAGER', 'EMPLOYEE'];
 
 @Injectable()
 export class StatisticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaveService: LeaveService,
+  ) {}
 
   /** docs/02 2.2 — ADMIN/SALES_MANAGER만 매출 통계 화면 접근 가능 */
   async getSalesCharts(requester: AuthUser) {
@@ -138,7 +142,7 @@ export class StatisticsService {
         orderBy: { workDate: 'desc' },
         take: 7,
       }),
-      this.prisma.leaveBalance.findUnique({ where: { userId_year: { userId: requester.sub, year } } }),
+      this.leaveService.findBalance(requester.sub, year),
     ]);
 
     const attendance: ChartPoint[] = records.reverse().map((r) => ({
@@ -148,13 +152,11 @@ export class StatisticsService {
 
     return {
       attendance,
-      leave: leaveBalance
-        ? {
-            total: Number(leaveBalance.totalDays),
-            used: Number(leaveBalance.usedDays),
-            remaining: Number(leaveBalance.remainingDays),
-          }
-        : { total: 0, used: 0, remaining: 0 },
+      leave: {
+        total: leaveBalance.totalDays,
+        used: leaveBalance.usedDays,
+        remaining: leaveBalance.remainingDays,
+      },
     };
   }
 
@@ -250,7 +252,7 @@ export class StatisticsService {
       default: {
         const year = now.getFullYear();
         const [leaveBalance, pendingLeave, delayedCount, myPayroll] = await Promise.all([
-          this.prisma.leaveBalance.findUnique({ where: { userId_year: { userId: sub, year } } }),
+          this.leaveService.findBalance(sub, year),
           this.prisma.leaveRequest.count({ where: { userId: sub, status: 'PENDING' } }),
           this.prisma.productionOrder.count({ where: { managerId: sub, status: 'DELAYED' } }),
           this.prisma.payroll.findFirst({
@@ -261,7 +263,7 @@ export class StatisticsService {
           {
             key: 'myLeaveBalance',
             label: '내 연차 잔여',
-            value: leaveBalance ? `${Number(leaveBalance.remainingDays)}일` : '0일',
+            value: `${leaveBalance.remainingDays}일`,
           },
           {
             key: 'pendingLeave',

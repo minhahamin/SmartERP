@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSubmitLeaveRequest } from '@/pages/profile/hooks/use-leave';
-import { LEAVE_TYPE_LABEL, type LeaveType } from '@/mocks/leave';
+import { LEAVE_TYPE_LABEL, type LeaveType } from '@/pages/profile/api/leave-api';
 
 interface LeaveRequestDialogProps {
   open: boolean;

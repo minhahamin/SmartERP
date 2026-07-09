@@ -9,7 +9,11 @@ import { seedDefaultRoles, type DefaultRoleName } from '../src/common/seed/defau
 
 const prisma = new PrismaClient();
 
-/** docs/02 2.1 페르소나 + 프론트엔드 mocks/employees.ts 데모 계정과 1:1로 맞춘 시드 사용자 */
+/**
+ * docs/02 2.1 페르소나 + 프론트엔드 mocks/employees.ts 데모 계정과 1:1로 맞춘 시드 사용자.
+ * hireDate는 근로기준법 제60조 기반 연차 자동계산(leave-entitlement.util.ts)이 페르소나별로
+ * 서로 다른 구간(1년 미만 월차/가산연차/25일 한도)을 보여주도록 일부러 분산시켰다.
+ */
 const DEMO_USERS: {
   role: DefaultRoleName;
   employeeNo: string;
@@ -18,11 +22,12 @@ const DEMO_USERS: {
   position: string;
   deptName: string;
   baseSalary: number;
+  hireDate: Date;
 }[] = [
-  { role: 'ADMIN', employeeNo: 'E-1000', email: 'doyoon.kim@erpilot.io', name: '김도윤', position: '대표', deptName: '경영지원팀', baseSalary: 8_000_000 },
-  { role: 'HR_MANAGER', employeeNo: 'E-1042', email: 'yujin.choi@erpilot.io', name: '최유진', position: '과장', deptName: '인사팀', baseSalary: 3_000_000 },
-  { role: 'SALES_MANAGER', employeeNo: 'E-1024', email: 'minjun.kim@erpilot.io', name: '김민준', position: '팀장', deptName: '영업1팀', baseSalary: 3_200_000 },
-  { role: 'EMPLOYEE', employeeNo: 'E-1031', email: 'jihoon.park@erpilot.io', name: '박지훈', position: '사원', deptName: '생산1팀', baseSalary: 2_800_000 },
+  { role: 'ADMIN', employeeNo: 'E-1000', email: 'doyoon.kim@erpilot.io', name: '김도윤', position: '대표', deptName: '경영지원팀', baseSalary: 8_000_000, hireDate: new Date('2003-04-01') },
+  { role: 'HR_MANAGER', employeeNo: 'E-1042', email: 'yujin.choi@erpilot.io', name: '최유진', position: '과장', deptName: '인사팀', baseSalary: 3_000_000, hireDate: new Date('2022-05-10') },
+  { role: 'SALES_MANAGER', employeeNo: 'E-1024', email: 'minjun.kim@erpilot.io', name: '김민준', position: '팀장', deptName: '영업1팀', baseSalary: 3_200_000, hireDate: new Date('2021-04-15') },
+  { role: 'EMPLOYEE', employeeNo: 'E-1031', email: 'jihoon.park@erpilot.io', name: '박지훈', position: '사원', deptName: '생산1팀', baseSalary: 2_800_000, hireDate: new Date('2025-11-01') },
 ];
 
 const DEMO_PASSWORD = 'erpilot1234!';
@@ -47,7 +52,7 @@ async function main() {
   for (const demo of DEMO_USERS) {
     await prisma.user.upsert({
       where: { companyId_email: { companyId: company.id, email: demo.email } },
-      update: {},
+      update: { hireDate: demo.hireDate },
       create: {
         companyId: company.id,
         employeeNo: demo.employeeNo,
@@ -55,7 +60,7 @@ async function main() {
         passwordHash,
         name: demo.name,
         position: demo.position,
-        hireDate: new Date(),
+        hireDate: demo.hireDate,
         departmentId: departmentsByName.get(demo.deptName),
         roleId: roleIdByName[demo.role],
         baseSalary: demo.baseSalary,

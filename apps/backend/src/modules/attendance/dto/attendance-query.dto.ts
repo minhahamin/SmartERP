@@ -17,4 +17,9 @@ export class AttendanceQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   departmentId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
 }

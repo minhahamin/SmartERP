@@ -1,64 +1,65 @@
-import { generateAttendance, type AttendanceRecord } from '@/mocks/attendance';
-import { delay } from '@/mocks/delay';
+import { apiClient, type ApiSuccess } from '@/lib/api/client';
+import { useAuthStore } from '@/stores/auth-store';
 
-/** docs/06-wireframes.md 등 전체 mock 데이터가 기준으로 삼는 고정 "오늘" 날짜 */
-export const TODAY = '2026-06-19';
-const LATE_THRESHOLD = '09:00';
+export type AttendanceStatus = 'NORMAL' | 'LATE' | 'ABSENT' | 'REMOTE' | 'BUSINESS_TRIP';
 
-/** employeeId별 "오늘" 출퇴근 기록만 가변 상태로 보관 — 과거 이력은 결정론적 생성값을 그대로 사용한다. */
-const todayOverrides = new Map<string, AttendanceRecord>();
-
-function currentTime(): string {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+export interface AttendanceRecord {
+  date: string;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  status: AttendanceStatus;
+  workMinutes: number;
 }
 
-function diffMinutes(start: string, end: string): number {
-  const [startHour, startMinute] = start.split(':').map(Number);
-  const [endHour, endMinute] = end.split(':').map(Number);
-  return Math.max(endHour * 60 + endMinute - (startHour * 60 + startMinute), 0);
+interface RawAttendance {
+  id: string;
+  userId: string;
+  workDate: string;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  status: AttendanceStatus;
+  workMinutes: number | null;
 }
 
-function emptyTodayRecord(): AttendanceRecord {
-  return { date: TODAY, checkInAt: null, checkOutAt: null, status: 'ABSENT', workMinutes: 0 };
+export function todayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toTimeString(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function mapAttendance(raw: RawAttendance): AttendanceRecord {
+  return {
+    date: raw.workDate.slice(0, 10),
+    checkInAt: toTimeString(raw.checkInAt),
+    checkOutAt: toTimeString(raw.checkOutAt),
+    status: raw.status,
+    workMinutes: raw.workMinutes ?? 0,
+  };
 }
 
 export async function listMyAttendance(employeeId: string): Promise<AttendanceRecord[]> {
-  await delay(250);
-  const history = generateAttendance(employeeId)
-    .filter((r) => r.date !== TODAY)
-    .reverse();
-  const today = todayOverrides.get(employeeId) ?? emptyTodayRecord();
-  return [today, ...history];
+  const currentUserId = useAuthStore.getState().user?.id;
+  const { data } =
+    employeeId === currentUserId
+      ? await apiClient.get<ApiSuccess<RawAttendance[]>>('/attendances/me')
+      : await apiClient.get<ApiSuccess<RawAttendance[]>>('/attendances', { params: { userId: employeeId, limit: 100 } });
+
+  const records = data.data.map(mapAttendance);
+  const today = todayDateString();
+  if (records.some((r) => r.date === today)) return records;
+  return [{ date: today, checkInAt: null, checkOutAt: null, status: 'ABSENT', workMinutes: 0 }, ...records];
 }
 
-export async function checkIn(employeeId: string): Promise<AttendanceRecord> {
-  await delay(300);
-  const existing = todayOverrides.get(employeeId);
-  if (existing?.checkInAt) return existing;
-
-  const checkInAt = currentTime();
-  const record: AttendanceRecord = {
-    date: TODAY,
-    checkInAt,
-    checkOutAt: null,
-    status: checkInAt > LATE_THRESHOLD ? 'LATE' : 'NORMAL',
-    workMinutes: 0,
-  };
-  todayOverrides.set(employeeId, record);
-  return record;
+export async function checkIn(): Promise<AttendanceRecord> {
+  const { data } = await apiClient.post<ApiSuccess<RawAttendance>>('/attendances/check-in');
+  return mapAttendance(data.data);
 }
 
-export async function checkOut(employeeId: string): Promise<AttendanceRecord> {
-  await delay(300);
-  const existing = todayOverrides.get(employeeId);
-  if (!existing?.checkInAt) {
-    throw new Error('출근 기록이 없습니다. 먼저 출근 체크를 해주세요.');
-  }
-  if (existing.checkOutAt) return existing;
-
-  const checkOutAt = currentTime();
-  const record: AttendanceRecord = { ...existing, checkOutAt, workMinutes: diffMinutes(existing.checkInAt, checkOutAt) };
-  todayOverrides.set(employeeId, record);
-  return record;
+export async function checkOut(): Promise<AttendanceRecord> {
+  const { data } = await apiClient.post<ApiSuccess<RawAttendance>>('/attendances/check-out');
+  return mapAttendance(data.data);
 }

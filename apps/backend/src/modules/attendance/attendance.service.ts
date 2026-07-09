@@ -23,6 +23,7 @@ export class AttendanceService {
       where.user = { companyId: requester.companyId, departmentId: requester.departmentId };
     }
     if (query.departmentId) where.user = { ...(where.user as object), departmentId: query.departmentId };
+    if (query.userId) where.userId = query.userId;
     if (query.from || query.to) {
       where.workDate = {
         ...(query.from ? { gte: new Date(query.from) } : {}),
