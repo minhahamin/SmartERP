@@ -1,7 +1,14 @@
 import { apiClient, type ApiSuccess } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/auth-store';
 
-export type LeaveType = 'ANNUAL' | 'SICK' | 'SPECIAL' | 'UNPAID';
+export type LeaveType = 'ANNUAL' | 'HALF_DAY_AM' | 'HALF_DAY_PM' | 'HOURLY' | 'SICK' | 'SPECIAL' | 'UNPAID';
+
+/** 오전반차/오후반차/시간반차는 하루 단위 고정 일수(반차 0.5일, 시간반차 2시간=0.25일)로 신청한다 */
+export const FIXED_FRACTION_LEAVE_TYPES: LeaveType[] = ['HALF_DAY_AM', 'HALF_DAY_PM', 'HOURLY'];
+
+/** 시간반차는 2시간 단위 고정 구간 중 하나를 선택한다(구간당 0.25일 차감) — 백엔드 leave-constants.ts와 동일 */
+export const HOURLY_TIME_SLOTS = ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'] as const;
+
 export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface LeaveRequest {
@@ -10,6 +17,8 @@ export interface LeaveRequest {
   type: LeaveType;
   startDate: string;
   endDate: string;
+  startTime: string | null;
+  endTime: string | null;
   days: number;
   reason: string | null;
   status: LeaveStatus;
@@ -26,6 +35,9 @@ function toLeaveRequest(raw: RawLeaveRequest): LeaveRequest {
 
 export const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
   ANNUAL: '연차',
+  HALF_DAY_AM: '오전반차',
+  HALF_DAY_PM: '오후반차',
+  HOURLY: '시간반차',
   SICK: '병가',
   SPECIAL: '경조사',
   UNPAID: '무급휴가',
@@ -60,6 +72,8 @@ export interface SubmitLeaveRequestInput {
   type: LeaveType;
   startDate: string;
   endDate: string;
+  /** type이 HOURLY일 때만 필요(예: "09:00-11:00") */
+  timeSlot?: string;
   reason: string;
 }
 
@@ -68,6 +82,7 @@ export async function submitLeaveRequest(input: SubmitLeaveRequestInput): Promis
     type: input.type,
     startDate: input.startDate,
     endDate: input.endDate,
+    timeSlot: input.timeSlot,
     reason: input.reason,
   });
   return toLeaveRequest(data.data);

@@ -9,6 +9,7 @@ const ATTENDANCE_LABEL: Record<AttendanceStatus, string> = {
   ABSENT: '결근',
   REMOTE: '재택',
   BUSINESS_TRIP: '출장',
+  ON_LEAVE: '휴가',
 };
 
 /**
@@ -36,7 +37,8 @@ function AttendanceHistoryTable({ employeeId }: { employeeId: string }) {
       </thead>
       <tbody>
         {attendance.map((a) => {
-          const notStartedToday = !a.checkInAt && !a.checkOutAt && a.workMinutes === 0;
+          const notStartedToday = !a.leave && !a.checkInAt && !a.checkOutAt && a.workMinutes === 0;
+          const hasRealAttendance = a.status !== 'ON_LEAVE';
           return (
             <tr key={a.date} className="border-b border-border last:border-0">
               <td className="py-2 tabular-nums">{a.date}</td>
@@ -46,13 +48,20 @@ function AttendanceHistoryTable({ employeeId }: { employeeId: string }) {
                 {notStartedToday ? '-' : `${Math.floor(a.workMinutes / 60)}시간 ${a.workMinutes % 60}분`}
               </td>
               <td className="py-2">
-                {notStartedToday ? (
-                  <Badge>출근 전</Badge>
-                ) : (
-                  <Badge variant={a.status === 'LATE' ? 'warning' : a.status === 'ABSENT' ? 'danger' : 'default'}>
-                    {ATTENDANCE_LABEL[a.status]}
-                  </Badge>
-                )}
+                <div className="flex flex-wrap items-center gap-1">
+                  {notStartedToday && <Badge>출근 전</Badge>}
+                  {!notStartedToday && hasRealAttendance && (
+                    <Badge variant={a.status === 'LATE' ? 'warning' : a.status === 'ABSENT' ? 'danger' : 'default'}>
+                      {ATTENDANCE_LABEL[a.status]}
+                    </Badge>
+                  )}
+                  {a.leave && (
+                    <Badge variant="info">
+                      {a.leave.label}
+                      {a.leave.startTime && a.leave.endTime ? ` ${a.leave.startTime}~${a.leave.endTime}` : ''}
+                    </Badge>
+                  )}
+                </div>
               </td>
             </tr>
           );

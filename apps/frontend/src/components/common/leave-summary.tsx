@@ -74,7 +74,9 @@ function LeaveSummary({ employeeId, allowSubmit = false }: LeaveSummaryProps) {
               <tr key={r.id} className="border-b border-border last:border-0">
                 <td className="py-2">{LEAVE_TYPE_LABEL[r.type]}</td>
                 <td className="py-2 tabular-nums text-muted-foreground">
-                  {r.startDate} ~ {r.endDate}
+                  {r.startTime && r.endTime
+                    ? `${r.startDate} (${r.startTime}~${r.endTime})`
+                    : `${r.startDate} ~ ${r.endDate}`}
                 </td>
                 <td className="py-2 tabular-nums">{r.days}일</td>
                 <td className="py-2 text-muted-foreground">{r.reason}</td>

@@ -1,7 +1,15 @@
 import { apiClient, type ApiSuccess } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/auth-store';
+import type { LeaveType } from '@/pages/profile/api/leave-api';
 
-export type AttendanceStatus = 'NORMAL' | 'LATE' | 'ABSENT' | 'REMOTE' | 'BUSINESS_TRIP';
+export type AttendanceStatus = 'NORMAL' | 'LATE' | 'ABSENT' | 'REMOTE' | 'BUSINESS_TRIP' | 'ON_LEAVE';
+
+export interface AttendanceLeaveOverlay {
+  type: LeaveType;
+  label: string;
+  startTime: string | null;
+  endTime: string | null;
+}
 
 export interface AttendanceRecord {
   date: string;
@@ -9,6 +17,8 @@ export interface AttendanceRecord {
   checkOutAt: string | null;
   status: AttendanceStatus;
   workMinutes: number;
+  /** 그날 승인된 연차/반차 등이 있으면 채워진다(내 근태 탭에 겹쳐서 보여주기 위함) */
+  leave: AttendanceLeaveOverlay | null;
 }
 
 interface RawAttendance {
@@ -19,6 +29,8 @@ interface RawAttendance {
   checkOutAt: string | null;
   status: AttendanceStatus;
   workMinutes: number | null;
+  /** /attendances/me(이력 조회)에만 포함되고, check-in/check-out 응답에는 없다 */
+  leave?: AttendanceLeaveOverlay | null;
 }
 
 export function todayDateString(): string {
@@ -38,6 +50,7 @@ function mapAttendance(raw: RawAttendance): AttendanceRecord {
     checkOutAt: toTimeString(raw.checkOutAt),
     status: raw.status,
     workMinutes: raw.workMinutes ?? 0,
+    leave: raw.leave ?? null,
   };
 }
 
@@ -51,7 +64,7 @@ export async function listMyAttendance(employeeId: string): Promise<AttendanceRe
   const records = data.data.map(mapAttendance);
   const today = todayDateString();
   if (records.some((r) => r.date === today)) return records;
-  return [{ date: today, checkInAt: null, checkOutAt: null, status: 'ABSENT', workMinutes: 0 }, ...records];
+  return [{ date: today, checkInAt: null, checkOutAt: null, status: 'ABSENT', workMinutes: 0, leave: null }, ...records];
 }
 
 export async function checkIn(): Promise<AttendanceRecord> {

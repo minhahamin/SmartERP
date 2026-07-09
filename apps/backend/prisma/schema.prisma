@@ -188,6 +188,7 @@ enum AttendanceStatus {
   ABSENT
   REMOTE
   BUSINESS_TRIP
+  ON_LEAVE
 }
 
 model LeaveRequest {
@@ -196,7 +197,11 @@ model LeaveRequest {
   type       LeaveType
   startDate  DateTime    @db.Date
   endDate    DateTime    @db.Date
-  days       Decimal     @db.Decimal(4, 1)
+  // 오전/오후반차·시간반차처럼 하루 중 일부만 쓰는 유형의 실제 시간대("HH:mm").
+  // 종일 유형(연차/병가/경조사/무급휴가)은 null로 둔다.
+  startTime  String?
+  endTime    String?
+  days       Decimal     @db.Decimal(4, 2)
   reason     String?
   status     LeaveStatus @default(PENDING)
   approverId String?
@@ -210,6 +215,9 @@ model LeaveRequest {
 
 enum LeaveType {
   ANNUAL
+  HALF_DAY_AM
+  HALF_DAY_PM
+  HOURLY
   SICK
   SPECIAL
   UNPAID
