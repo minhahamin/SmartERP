@@ -20,6 +20,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:seed-demo": "ts-node prisma/seed-demo-data.ts",
     "prisma:studio": "prisma studio",
     "swagger:generate": "ts-node scripts/generate-openapi.ts"
   },
