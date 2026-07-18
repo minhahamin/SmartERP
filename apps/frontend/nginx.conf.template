@@ -1,0 +1,21 @@
+server {
+    listen ${PORT};
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # React Router(SPA) — 알 수 없는 경로는 전부 index.html로 위임
+    location / {
+        try_files $uri /index.html;
+        add_header Cache-Control "no-cache";
+    }
+
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
