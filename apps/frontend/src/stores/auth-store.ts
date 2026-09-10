@@ -54,9 +54,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   changePassword: async (currentPassword, newPassword) => {
-    await authApi.changePassword(currentPassword, newPassword);
-    const current = get().user;
-    if (current) set({ user: { ...current, mustChangePassword: false } });
+    const { accessToken, user } = await authApi.changePassword(currentPassword, newPassword);
+    set({ accessToken, user, isAuthenticated: true });
   },
 
   logout: async () => {

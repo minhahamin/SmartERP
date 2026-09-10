@@ -19,11 +19,18 @@ export interface AppDocument {
   createdAt: string;
 }
 
-/** 백엔드가 내려주는 /uploads/... 상대 경로를 다운로드 링크로 쓸 수 있는 절대 URL로 바꾼다 */
-const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api/v1').replace(/\/api\/v1\/?$/, '');
-
-export function toAbsoluteFileUrl(fileUrl: string): string {
-  return fileUrl.startsWith('http') ? fileUrl : `${API_ORIGIN}${fileUrl}`;
+/**
+ * 문서 원본 다운로드 — 인증 기반 GET /documents/:id/file 을 blob으로 받아 object URL로 반환한다.
+ * /uploads/documents 직접 접근은 서버에서 차단되어 있으므로 이 경유만 사용한다.
+ * 호출자는 사용 후 URL.revokeObjectURL(url)로 해제한다.
+ */
+export async function fetchDocumentFileUrl(documentId: string): Promise<{ url: string; filename: string }> {
+  const { data, headers } = await apiClient.get(`/documents/${documentId}/file`, { responseType: 'blob' });
+  const blob = data as Blob;
+  const disposition = (headers?.['content-disposition'] as string | undefined) ?? '';
+  const match = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  const filename = match?.[1] ? decodeURIComponent(match[1]) : 'download';
+  return { url: URL.createObjectURL(blob), filename };
 }
 
 export interface DocumentListQuery {

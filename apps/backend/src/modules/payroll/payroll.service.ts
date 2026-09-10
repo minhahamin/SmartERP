@@ -57,6 +57,8 @@ export class PayrollService {
 
   async findHistoryForUser(userId: string, query: PayrollHistoryQueryDto, requester: AuthUser) {
     await this.policy.assertAccess(requester, 'PAYROLL', 'READ', userId);
+    // 테넌트 격리: 대상 사용자가 요청자와 같은 회사인지 확인 (IDOR 방지)
+    await this.assertSameCompany(userId, requester);
     return this.prisma.payroll.findMany({
       where: { userId, ...(query.year ? { payYear: query.year } : {}) },
       orderBy: [{ payYear: 'desc' }, { payMonth: 'desc' }],
@@ -128,6 +130,15 @@ export class PayrollService {
     await this.policy.assertAccess(requester, 'PAYROLL', 'READ', payroll.userId);
     // PDF 렌더링은 범위 밖(docs 07/08/12/13/14에 PDF 엔진 명시 없음) — 명세서 데이터를 그대로 반환
     return payroll;
+  }
+
+  /** 테넌트 격리: userId 경로(IDOR 방지) — 대상이 같은 회사 소속이 아니면 존재 자체를 숨긴다 */
+  private async assertSameCompany(userId: string, requester: AuthUser): Promise<void> {
+    const target = await this.prisma.user.findFirst({
+      where: { id: userId, companyId: requester.companyId },
+      select: { id: true },
+    });
+    if (!target) throw new NotFoundException('급여 항목을 찾을 수 없습니다.');
   }
 
   /** 테넌트 격리: Payroll에 companyId가 없으므로 소유 User 조인으로 강제한다 */

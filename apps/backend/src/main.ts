@@ -30,8 +30,11 @@ async function bootstrap() {
     res.setHeader('Content-Security-Policy', `frame-ancestors 'self' ${corsOrigins.join(' ')}`);
     next();
   });
-  // 로컬 디스크에 저장된 문서 원본 서빙(docs/13은 S3를 전제하지만 실제 AWS 연동은 범위 밖)
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+  // 문서 원본(/uploads/documents)은 인증 기반 GET /documents/:id/file 로만 제공한다.
+  // 디렉터리 통째 정적 서빙은 전역 가드(JWT/Permissions)보다 앞선 Express 미들웨어라
+  // DOCUMENT:READ 권한을 우회하므로 금지. 상품 이미지(/uploads/products)는 <img> 직접
+  // 로딩용으로만 공개한다 (UUID 파일명 + 비민감 카탈로그 자산, 목록 API 자체는 인증 필요).
+  app.useStaticAssets(join(process.cwd(), 'uploads', 'products'), { prefix: '/uploads/products' });
   app.enableCors({
     origin: corsOrigins,
     credentials: true,

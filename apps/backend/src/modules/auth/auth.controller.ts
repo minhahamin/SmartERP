@@ -9,6 +9,8 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
 
@@ -41,9 +43,14 @@ export class AuthController {
   @HttpCode(200)
   @Post('change-password')
   @ApiOperation({ summary: '비밀번호 변경 (초대 가입자의 최초 비밀번호 변경 포함, docs/02 2.4)' })
-  async changePassword(@Body() body: ChangePasswordDto, @CurrentUser() user: AuthUser) {
-    await this.authService.changePassword(user.sub, body);
-    return { success: true };
+  async changePassword(
+    @Body() body: ChangePasswordDto,
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.changePassword(user.sub, body);
+    this.setRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt);
+    return { accessToken: result.accessToken, user: result.user };
   }
 
   @Public()
@@ -61,7 +68,7 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('forgot-password')
   @ApiOperation({ summary: '비밀번호 찾기 (재설정 토큰 발급 — 운영에서는 이메일 발송)' })
-  async forgotPassword(@Body() body: { email: string }) {
+  async forgotPassword(@Body() body: ForgotPasswordDto) {
     return this.authService.forgotPassword(body.email);
   }
 
@@ -69,7 +76,7 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('reset-password')
   @ApiOperation({ summary: '비밀번호 재설정 (단기 토큰 사용)' })
-  async resetPassword(@Body() body: { resetToken: string; newPassword: string }) {
+  async resetPassword(@Body() body: ResetPasswordDto) {
     await this.authService.resetPassword(body.resetToken, body.newPassword);
     return { success: true };
   }
@@ -83,7 +90,7 @@ export class AuthController {
     res.clearCookie(REFRESH_TOKEN_COOKIE, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production' || process.env.COOKIE_SAME_SITE === 'none',
-      sameSite: (process.env.COOKIE_SAME_SITE === 'none' ? 'none' : 'strict') as 'none' | 'strict',
+      sameSite: process.env.COOKIE_SAME_SITE === 'none' ? 'none' : 'strict',
       path: '/',
     });
     return { success: true };

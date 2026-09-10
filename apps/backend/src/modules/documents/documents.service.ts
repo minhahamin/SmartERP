@@ -146,7 +146,10 @@ export class DocumentsService {
     // multer는 multipart 파일명을 latin1로 디코딩한다 — 비ASCII 원본 파일명은 utf8로 다시 해석해야 한다.
     const decoded = Buffer.from(file.originalname, 'latin1').toString('utf8');
     // 경로조작 방지: basename만 사용 + 허용 문자以外 치환 + 길이 제한
-    const safeBase = basename(decoded).replace(/[^a-zA-Z0-9가-힣._-]+/g, '_').slice(0, 100) || 'file';
+    const safeBase =
+      basename(decoded)
+        .replace(/[^a-zA-Z0-9가-힣._-]+/g, '_')
+        .slice(0, 100) || 'file';
     const fileName = `${randomUUID()}-${safeBase}`;
     await writeFile(join(UPLOAD_DIR, fileName), file.buffer);
     return `/uploads/documents/${fileName}`;

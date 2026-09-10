@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Sparkles, FileText, Download, UploadCloud } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { toAbsoluteFileUrl, type AppDocument } from '@/pages/documents/api/documents-api';
+import { fetchDocumentFileUrl, type AppDocument } from '@/pages/documents/api/documents-api';
 
 interface DocumentPreviewDialogProps {
   document: AppDocument | null;
@@ -10,6 +11,34 @@ interface DocumentPreviewDialogProps {
 }
 
 function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentPreviewDialogProps) {
+  // 문서 원본은 인증 기반 :id/file 로 blob을 받아 표시한다 (/uploads 직접 접근은 서버에서 차단)
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [fileName, setFileName] = useState('download');
+
+  useEffect(() => {
+    if (!document) return;
+    let revoked = false;
+    let objectUrl: string | null = null;
+    setFileUrl(null);
+    fetchDocumentFileUrl(document.id)
+      .then(({ url, filename }) => {
+        if (revoked) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setFileUrl(url);
+        setFileName(filename);
+      })
+      .catch(() => {
+        if (!revoked) setFileUrl(null);
+      });
+    return () => {
+      revoked = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [document]);
+
   if (!document) return null;
 
   return (
@@ -21,8 +50,8 @@ function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentP
             <Button variant="secondary" size="sm" onClick={() => onReupload(document)}>
               <UploadCloud /> 새 버전 업로드
             </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <a href={toAbsoluteFileUrl(document.fileUrl)} target="_blank" rel="noreferrer">
+            <Button variant="secondary" size="sm" asChild disabled={!fileUrl}>
+              <a href={fileUrl ?? undefined} download={fileName} target="_blank" rel="noreferrer">
                 <Download /> 다운로드
               </a>
             </Button>
@@ -30,11 +59,18 @@ function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentP
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-[1.4fr_1fr]">
           {document.fileType === 'application/pdf' ? (
-            <iframe
-              title={document.title}
-              src={toAbsoluteFileUrl(document.fileUrl)}
-              className="h-80 w-full rounded-md border border-border md:h-full"
-            />
+            fileUrl ? (
+              <iframe
+                title={document.title}
+                src={fileUrl}
+                className="h-80 w-full rounded-md border border-border md:h-full"
+              />
+            ) : (
+              <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-md bg-gray-50 text-muted-foreground">
+                <FileText className="size-10" />
+                <p className="text-xs">파일을 불러오는 중입니다</p>
+              </div>
+            )
           ) : (
             <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-md bg-gray-50 text-muted-foreground">
               <FileText className="size-10" />

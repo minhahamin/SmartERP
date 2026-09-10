@@ -38,12 +38,29 @@ const ALLOWED_MIMES = new Set([
   'application/msword',
   'application/vnd.ms-excel',
 ]);
-const ALLOWED_EXTS = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.txt', '.csv', '.docx', '.xlsx', '.doc', '.xls']);
+const ALLOWED_EXTS = new Set([
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.gif',
+  '.txt',
+  '.csv',
+  '.docx',
+  '.xlsx',
+  '.doc',
+  '.xls',
+]);
 
-function documentFileFilter(_req: unknown, file: Express.Multer.File, cb: (err: Error | null, accept: boolean) => void) {
+function documentFileFilter(
+  _req: unknown,
+  file: Express.Multer.File,
+  cb: (err: Error | null, accept: boolean) => void,
+) {
   const ext = `.${(file.originalname.split('.').pop() ?? '').toLowerCase()}`;
   if (!ALLOWED_MIMES.has(file.mimetype) || !ALLOWED_EXTS.has(ext)) {
-    cb(new BadRequestException('허용되지 않은 파일 형식입니다 (pdf/이미지/office/txt/csv만 가능).') as Error, false);
+    cb(new BadRequestException('허용되지 않은 파일 형식입니다 (pdf/이미지/office/txt/csv만 가능).'), false);
     return;
   }
   cb(null, true);

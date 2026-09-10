@@ -77,6 +77,15 @@ export class ProductionService {
       const producedQty = dto.producedQty ?? order.plannedQty;
 
       return this.prisma.$transaction(async (tx) => {
+        // 동시 완료 요청 경합 방지: 멱등 체크를 트랜잭션 안 조건부 업데이트로 수행해
+        // 승자 1건만 입고를 진행하고, 패자는 이미 COMPLETED인 행을 그대로 반환한다.
+        const claimed = await tx.productionOrder.updateMany({
+          where: { id, companyId: requester.companyId, status: { not: 'COMPLETED' } },
+          data: { status: 'COMPLETED', producedQty },
+        });
+        if (claimed.count === 0) {
+          return tx.productionOrder.findUniqueOrThrow({ where: { id } });
+        }
         await tx.inventory.upsert({
           where: { productId_warehouseId: { productId: order.productId, warehouseId: order.warehouseId! } },
           create: { productId: order.productId, warehouseId: order.warehouseId!, quantity: producedQty },
@@ -93,7 +102,7 @@ export class ProductionService {
             createdBy: requester.sub,
           },
         });
-        return tx.productionOrder.update({ where: { id }, data: { status: 'COMPLETED', producedQty } });
+        return tx.productionOrder.findUniqueOrThrow({ where: { id } });
       });
     }
 

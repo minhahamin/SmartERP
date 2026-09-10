@@ -87,10 +87,17 @@ export class AuthService {
     });
   }
 
-  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+  /**
+   * 비밀번호 변경 — 변경 전 탈취된 refresh 토큰이 계속 회전되는 것을 막기 위해
+   * 변경 시점에 토큰을 재발급(Rotation)하고, 이전 토큰의 재사용 유예(grace) 기록을
+   * 제거한다. 탈취된 refresh는 어느 경로로도 재사용 불가하고, 변경자 본인은
+   * 새 토큰으로 세션이 유지된다. (access 토큰은 최대 15분 잔존 — docs/12 한계 명시)
+   */
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<IssuedTokens> {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      omit: { passwordHash: false },
+      include: { role: true, department: true },
+      omit: { passwordHash: false, refreshTokenHash: false },
     });
     const passwordMatches = await bcrypt.compare(dto.currentPassword, user.passwordHash);
     // 401이 아닌 400을 쓴다 — 인증(토큰)은 유효하므로, 프론트엔드 axios 인터셉터가 이를
@@ -103,6 +110,17 @@ export class AuthService {
       where: { id: userId },
       data: { passwordHash, mustChangePassword: false },
     });
+
+    const rememberMe =
+      !!user.refreshTokenExpiresAt &&
+      user.refreshTokenExpiresAt.getTime() - Date.now() > 15 * 24 * 60 * 60 * 1000;
+    const issued = await this.issueTokens(user, rememberMe);
+    // grace 재사용 경로(previousRefreshTokenHash)까지 제거 — 구 refresh 완전 무효화
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { previousRefreshTokenHash: null },
+    });
+    return issued;
   }
 
   /**
@@ -143,8 +161,7 @@ export class AuthService {
         omit: { refreshTokenHash: false },
       });
       if (!fresh) throw new UnauthorizedException('유효하지 않은 Refresh Token입니다.');
-      const rememberMe =
-        reused.refreshTokenExpiresAt.getTime() - Date.now() > 15 * 24 * 60 * 60 * 1000;
+      const rememberMe = reused.refreshTokenExpiresAt.getTime() - Date.now() > 15 * 24 * 60 * 60 * 1000;
       return this.issueTokens(fresh, rememberMe);
     }
 
@@ -156,13 +173,23 @@ export class AuthService {
   }
 
   /**
-   * 비밀번호 찾기 — 계정 열거 방지용으로 존재 여부와 무관하게 success를 반환한다.
-   * 실제 운영에서는 resetToken을 이메일로 발송해야 하며, 여기서는 데모 확인용으로 토큰을 반환한다.
+   * 비밀번호 찾기 — 계정 열거 방지용으로 존재 여부와 무관하게 success만 반환한다.
+   * 재설정 토큰은 응답에 절대 포함하지 않고(ATO 방지) 운영에서는 이메일로 발송한다.
+   * 개발 환경에서는 서버 콘솔에 출력해 데모 흐름을 확인할 수 있게 한다.
    */
-  async forgotPassword(email: string): Promise<{ success: true; resetToken: string | null }> {
+  async forgotPassword(email: string): Promise<{ success: true }> {
     const user = await this.prisma.user.findFirst({ where: { email, status: 'ACTIVE' } });
-    if (!user) return { success: true, resetToken: null };
-    return { success: true, resetToken: this.tokenService.signPasswordResetToken(user.id) };
+    if (!user) return { success: true };
+    const resetToken = this.tokenService.signPasswordResetToken(user.id);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(
+        `[auth] password reset token for ${email} (dev only, do not expose via API): ${resetToken}`,
+      );
+    } else {
+      // TODO: 이메일 발송 연동 (resetToken을 메일로 전달)
+      void resetToken;
+    }
+    return { success: true };
   }
 
   async resetPassword(resetToken: string, newPassword: string): Promise<void> {

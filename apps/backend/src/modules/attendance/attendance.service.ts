@@ -81,6 +81,8 @@ export class AttendanceService {
   /** 본인 근태 이력(docs 요구사항: 승인된 휴가/반차도 겹쳐 보여준다) — HR/Admin이 부서원 조회 시에도 재사용 */
   async findHistoryForUser(userId: string, query: AttendanceQueryDto, requester: AuthUser) {
     await this.policy.assertAccess(requester, 'ATTENDANCE', 'READ', userId);
+    // 테넌트 격리: 대상 사용자가 요청자와 같은 회사인지 확인 (IDOR 방지)
+    await this.assertSameCompany(userId, requester);
 
     const [attendances, leaves] = await Promise.all([
       this.prisma.attendance.findMany({

@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AppException } from '../../common/exceptions/app.exception';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { CreateSalesOrderDto } from './dto/sales-order.dto';
@@ -88,12 +90,87 @@ export class SalesOrdersService {
   }
 
   async updateStatus(id: string, dto: UpdateSalesOrderStatusDto, requester: AuthUser) {
-    await this.findOne(id, requester);
+    const order = await this.findOne(id, requester);
+    // SHIPPED 전이는 재고 차감과 하나의 트랜잭션으로 묶는다 — 상태만 바뀌고 재고가 그대로인 불일치 방지
+    if (dto.status === 'SHIPPED' && order.status !== 'SHIPPED') {
+      return this.shipWithStockDeduction(order, requester);
+    }
     return this.prisma.salesOrder.update({
       where: { id },
       data: { status: dto.status },
       include: INCLUDE,
     });
+  }
+
+  /**
+   * 출고 처리 — 조건부 상태 선점 + 품목별 재고 차감을 Serializable 트랜잭션으로 묶는다.
+   * - 동시 SHIPPED 경합은 선점 1건만 차감, 패자는 현재 행 반환 (이중 차감 방지)
+   * - SHIPPED→CANCELLED→SHIPPED 반복 시 기존 SALES 출고 기록이 있으면 차감 생략 (중복 차감 방지)
+   * - 회사 창고 보유량 기준 내림차순으로 차감, 부족 시 409
+   */
+  private async shipWithStockDeduction(
+    order: Awaited<ReturnType<SalesOrdersService['findOne']>>,
+    requester: AuthUser,
+  ) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const claimed = await tx.salesOrder.updateMany({
+          where: { id: order.id, companyId: requester.companyId, status: { not: 'SHIPPED' } },
+          data: { status: 'SHIPPED' },
+        });
+        if (claimed.count === 0) {
+          return tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, include: INCLUDE });
+        }
+        const alreadyDeducted = await tx.stockMovement.findFirst({
+          where: { refType: 'SALES', refId: order.id, type: 'OUT' },
+        });
+        if (!alreadyDeducted) {
+          for (const item of order.items) {
+            await this.deductItemStock(tx, order.id, item.productId, item.quantity, requester);
+          }
+        }
+        return tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, include: INCLUDE });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  private async deductItemStock(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    productId: string,
+    quantity: number,
+    requester: AuthUser,
+  ): Promise<void> {
+    const stocks = await tx.inventory.findMany({
+      where: { productId, warehouse: { companyId: requester.companyId } },
+      orderBy: { quantity: 'desc' },
+    });
+    let remaining = quantity;
+    for (const stock of stocks) {
+      if (remaining <= 0) break;
+      const take = Math.min(stock.quantity, remaining);
+      if (take <= 0) continue;
+      await tx.inventory.update({
+        where: { productId_warehouseId: { productId, warehouseId: stock.warehouseId } },
+        data: { quantity: { decrement: take } },
+      });
+      await tx.stockMovement.create({
+        data: {
+          productId,
+          warehouseId: stock.warehouseId,
+          type: 'OUT',
+          quantity: take,
+          refType: 'SALES',
+          refId: orderId,
+          createdBy: requester.sub,
+        },
+      });
+      remaining -= take;
+    }
+    if (remaining > 0) {
+      throw new AppException('STOCK_INSUFFICIENT', '재고가 부족해 출고할 수 없습니다.', 409);
+    }
   }
 
   private async nextOrderNo(companyId: string): Promise<string> {

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { LeaveRequest, LeaveType } from '@prisma/client';
+import { Prisma, type LeaveRequest, type LeaveType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PolicyService } from '../../common/services/policy.service';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
@@ -126,35 +126,58 @@ export class LeaveService {
       if (days <= 0) throw new BadRequestException('종료일은 시작일 이후여야 합니다.');
     }
 
-    if (ANNUAL_CONSUMING_TYPES.includes(dto.type)) {
-      const balance = await this.findBalance(requester.sub, new Date(dto.startDate).getFullYear());
-      if (days > balance.remainingDays) {
-        throw new BadRequestException(
-          `잔여 연차(${balance.remainingDays}일)보다 많은 일수(${days}일)를 신청할 수 없습니다.`,
-        );
-      }
-    }
-
     // 본인이 이미 LEAVE:APPROVE 권한을 가진 관리자/인사담당자라면 스스로 결재를 기다릴 이유가 없어
     // 즉시 승인 처리한다(도구 노출과 동일하게 RolePermission 테이블을 조회해 하드코딩 없이 판단).
     const selfApproves = await this.policy.hasPermission(requester, 'LEAVE', 'APPROVE');
 
-    const request = await this.prisma.leaveRequest.create({
+    if (ANNUAL_CONSUMING_TYPES.includes(dto.type)) {
+      // 잔액 체크와 생성은 한 트랜잭션으로 묶는다 (조회-쓰기 사이 끼어들기 방지 — 1차 방어선.
+      // 최종 정합성은 승인 시점 재검사로 보장한다)
+      return this.prisma.$transaction(async (tx) => {
+        const balance = await this.calcBalance(tx, requester.sub, new Date(dto.startDate).getFullYear());
+        if (days > balance.remainingDays) {
+          throw new BadRequestException(
+            `잔여 연차(${balance.remainingDays}일)보다 많은 일수(${days}일)를 신청할 수 없습니다.`,
+          );
+        }
+        return this.insertRequest(tx, dto, requester, { days, startTime, endTime, selfApproves });
+      });
+    }
+
+    // 연차 외 유형(병가/경조사/무급휴가)은 잔액 제한 없이 생성만 원자적으로 처리한다.
+    return this.prisma.$transaction(async (tx) =>
+      this.insertRequest(tx, dto, requester, { days, startTime, endTime, selfApproves }),
+    );
+  }
+
+  /** 휴가 신청 행 생성 + 즉시승인 시 스케줄 반영을 한 트랜잭션으로 처리한다 */
+  private async insertRequest(
+    tx: Prisma.TransactionClient,
+    dto: CreateLeaveRequestDto,
+    requester: AuthUser,
+    computed: {
+      days: number;
+      startTime: string | undefined;
+      endTime: string | undefined;
+      selfApproves: boolean;
+    },
+  ) {
+    const request = await tx.leaveRequest.create({
       data: {
         userId: requester.sub,
         type: dto.type,
         startDate: new Date(dto.startDate),
         endDate: new Date(dto.endDate),
-        startTime,
-        endTime,
-        days,
+        startTime: computed.startTime,
+        endTime: computed.endTime,
+        days: computed.days,
         reason: dto.reason,
-        ...(selfApproves ? { status: 'APPROVED', approverId: requester.sub } : {}),
+        ...(computed.selfApproves ? { status: 'APPROVED', approverId: requester.sub } : {}),
       },
     });
 
-    if (selfApproves) {
-      await this.createLeaveSchedule(request, requester);
+    if (computed.selfApproves) {
+      await this.createLeaveSchedule(tx, request, requester);
     }
 
     return request;
@@ -177,9 +200,40 @@ export class LeaveService {
 
   /** 승인 시 근태연동으로 일정관리 캘린더에도 자동 반영한다(docs 요구사항: 승인된 휴가는 팀 캘린더에서 보여야 함) */
   async approve(id: string, requester: AuthUser) {
-    const request = await this.transitionStatus(id, 'APPROVED', requester);
-    await this.createLeaveSchedule(request, requester);
-    return request;
+    // 승인/반려 권한은 서비스 레벨에서도 강제 (컨트롤러 가드 우회 대비)
+    await this.policy.assertAccess(requester, 'LEAVE', 'APPROVE');
+    // 상태 전이 + 잔액 재검사 + 스케줄 반영을 Serializable 트랜잭션으로 묶는다.
+    // PENDING 중복 신청이 여러 건이어도 승인 시점에 합산 잔액을 검사하므로 overdraw 불가하고,
+    // 동시 승인 경합도 직렬화되어 한 건만 통과한다. 전이-반영이 분리되면 "승인됐는데 캘린더 누락"
+    // 반쪽 성공이 생기므로 반드시 같은 트랜잭션에서 처리한다.
+    return this.prisma.$transaction(
+      async (tx) => {
+        const request = await tx.leaveRequest.findUnique({
+          where: { id },
+          include: { user: { select: { companyId: true } } },
+        });
+        if (!request || request.user.companyId !== requester.companyId)
+          throw new NotFoundException('휴가 신청을 찾을 수 없습니다.');
+        if (request.status !== 'PENDING') throw new BadRequestException('이미 처리된 신청입니다.');
+
+        if (ANNUAL_CONSUMING_TYPES.includes(request.type)) {
+          const balance = await this.calcBalance(tx, request.userId, request.startDate.getFullYear());
+          if (Number(request.days) > balance.remainingDays) {
+            throw new BadRequestException(
+              `잔여 연차(${balance.remainingDays}일)가 부족해 승인할 수 없습니다.`,
+            );
+          }
+        }
+
+        const approved = await tx.leaveRequest.update({
+          where: { id },
+          data: { status: 'APPROVED', approverId: requester.sub },
+        });
+        await this.createLeaveSchedule(tx, approved, requester);
+        return approved;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   }
 
   reject(id: string, requester: AuthUser) {
@@ -192,12 +246,17 @@ export class LeaveService {
    * 값이 어긋날 여지를 없앤다).
    */
   async findBalance(userId: string, year: number) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { hireDate: true } });
+    return this.calcBalance(this.prisma, userId, year);
+  }
+
+  /** 읽기 전용 집계는 db를 주입받아 트랜잭션 안에서도 동일하게 호출한다 */
+  private async calcBalance(db: Prisma.TransactionClient | PrismaService, userId: string, year: number) {
+    const user = await db.user.findUnique({ where: { id: userId }, select: { hireDate: true } });
     const now = new Date();
     const asOf = year === now.getFullYear() ? now : new Date(year, 11, 31);
     const totalDays = calculateAnnualLeaveEntitlement(user?.hireDate ?? null, asOf);
 
-    const approvedAnnual = await this.prisma.leaveRequest.findMany({
+    const approvedAnnual = await db.leaveRequest.findMany({
       where: {
         userId,
         type: { in: ANNUAL_CONSUMING_TYPES },
@@ -225,14 +284,18 @@ export class LeaveService {
     return this.prisma.leaveRequest.update({ where: { id }, data: { status, approverId: requester.sub } });
   }
 
-  private async createLeaveSchedule(request: LeaveRequest, requester: AuthUser) {
-    const employee = await this.prisma.user.findUnique({
+  private async createLeaveSchedule(
+    db: Prisma.TransactionClient | PrismaService,
+    request: LeaveRequest,
+    requester: AuthUser,
+  ) {
+    const employee = await db.user.findUnique({
       where: { id: request.userId },
       select: { name: true },
     });
     const { startAt, endAt, allDay } = resolveScheduleWindow(request);
 
-    await this.prisma.schedule.create({
+    await db.schedule.create({
       data: {
         companyId: requester.companyId,
         ownerId: request.userId,

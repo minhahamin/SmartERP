@@ -70,6 +70,8 @@ export class UsersService {
   async create(dto: CreateUserDto, requester: AuthUser) {
     await this.policy.assertAccess(requester, 'USER', 'CREATE');
     const company = await this.prisma.company.findUniqueOrThrow({ where: { id: requester.companyId } });
+    // 권한 상승 방지: roleId/departmentId가 같은 회사 소속인지 검증 (타 회사 역할 부여 차단)
+    await this.assertRoleAndDepartment(dto.roleId, dto.departmentId, requester.companyId);
     const temporaryPassword = randomBytes(6).toString('hex');
     const passwordHash = await bcrypt.hash(temporaryPassword, 12);
 
@@ -103,6 +105,8 @@ export class UsersService {
     }
 
     const data = isSelf && !hasFullPermission ? this.pickSelfEditableFields(dto) : dto;
+    // 권한 상승 방지: roleId/departmentId 변경 시 같은 회사 소속인지 검증
+    await this.assertRoleAndDepartment(data.roleId, data.departmentId, requester.companyId);
     const { hireDate, ...rest } = data;
     return this.prisma.user.update({
       where: { id },
@@ -120,6 +124,32 @@ export class UsersService {
     // docs/07 7.6 #2 — 소프트 삭제: 과거 급여/근태 참조 무결성 유지를 위해 행을 삭제하지 않는다
     await this.prisma.user.update({ where: { id }, data: { status: 'RESIGNED' } });
     return { success: true };
+  }
+
+  /**
+   * roleId/departmentId가 요청자와 같은 회사 소속인지 검증한다.
+   * 검증 없이 저장하면 USER:CREATE/UPDATE 보유자가 타 회사 ADMIN 역할을 부여하거나
+   * 타 회사 부서에 편입시킬 수 있다 (권한 상승 + 크로스 테넌트 오염).
+   */
+  private async assertRoleAndDepartment(
+    roleId: string | undefined,
+    departmentId: string | undefined,
+    companyId: string,
+  ): Promise<void> {
+    if (roleId) {
+      const role = await this.prisma.role.findFirst({
+        where: { id: roleId, companyId },
+        select: { id: true },
+      });
+      if (!role) throw new NotFoundException('지정한 역할을 찾을 수 없습니다.');
+    }
+    if (departmentId) {
+      const department = await this.prisma.department.findFirst({
+        where: { id: departmentId, companyId },
+        select: { id: true },
+      });
+      if (!department) throw new NotFoundException('지정한 부서를 찾을 수 없습니다.');
+    }
   }
 
   private pickSelfEditableFields(dto: UpdateUserDto) {

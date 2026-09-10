@@ -71,5 +71,9 @@ export async function logout() {
 }
 
 export async function changePassword(currentPassword: string, newPassword: string) {
-  await apiClient.post('/auth/change-password', { currentPassword, newPassword });
+  const { data } = await apiClient.post<ApiSuccess<LoginResponseData>>('/auth/change-password', {
+    currentPassword,
+    newPassword,
+  });
+  return { accessToken: data.data.accessToken, user: toAuthUser(data.data.user) };
 }
