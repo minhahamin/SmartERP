@@ -25,7 +25,7 @@ function AuthLayout({ children }: AuthLayoutProps) {
             메뉴를 외울 필요 없이 자연어 질문 하나로 원하는 데이터에 도달하세요.
           </p>
         </div>
-        <p className="text-xs text-white/40">© 2026 ERPilot. AI 기반 ERP SaaS 플랫폼.</p>
+        <p className="text-xs text-white/40">© 2026 ERPilot. Made by 홍민하.</p>
       </div>
 
       <div className="flex flex-1 items-center justify-center p-6 sm:p-10">

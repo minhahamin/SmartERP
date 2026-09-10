@@ -59,6 +59,12 @@ function SidebarContent({ collapsed = false, onToggleCollapsed, onNavigate }: Si
           </button>
         </div>
       )}
+
+      {!collapsed && (
+        <p className="shrink-0 px-4 py-2.5 text-[11px] text-sidebar-muted-foreground">
+          Made by 홍민하
+        </p>
+      )}
     </div>
   );
 }
