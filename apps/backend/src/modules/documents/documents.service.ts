@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
+import { createReadStream, type ReadStream } from 'fs';
 import { mkdir, unlink, writeFile } from 'fs/promises';
-import { join } from 'path';
+import { basename, join, normalize, resolve } from 'path';
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
@@ -143,15 +144,37 @@ export class DocumentsService {
   private async saveFile(file: Express.Multer.File): Promise<string> {
     await mkdir(UPLOAD_DIR, { recursive: true });
     // multer는 multipart 파일명을 latin1로 디코딩한다 — 비ASCII 원본 파일명은 utf8로 다시 해석해야 한다.
-    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    const fileName = `${randomUUID()}-${originalName}`;
+    const decoded = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    // 경로조작 방지: basename만 사용 + 허용 문자以外 치환 + 길이 제한
+    const safeBase = basename(decoded).replace(/[^a-zA-Z0-9가-힣._-]+/g, '_').slice(0, 100) || 'file';
+    const fileName = `${randomUUID()}-${safeBase}`;
     await writeFile(join(UPLOAD_DIR, fileName), file.buffer);
     return `/uploads/documents/${fileName}`;
   }
 
+  /** 인증 기반 다운로드용 스트림 — companyId 검증 후 UPLOAD_DIR 밖으로 탈출 불가 */
+  async openFileStream(
+    id: string,
+    requester: AuthUser,
+  ): Promise<{ stream: ReadStream; filename: string; mimetype: string }> {
+    const document = await this.findOne(id, requester);
+    const absolute = resolve(join(process.cwd(), document.fileUrl.replace(/^\//, '')));
+    if (!absolute.startsWith(resolve(UPLOAD_DIR))) {
+      throw new NotFoundException('문서를 찾을 수 없습니다.');
+    }
+    return {
+      stream: createReadStream(absolute),
+      filename: basename(document.fileUrl),
+      mimetype: document.fileType || 'application/octet-stream',
+    };
+  }
+
   private async deleteFile(fileUrl: string): Promise<void> {
     try {
-      await unlink(join(process.cwd(), fileUrl.replace(/^\//, '')));
+      const absolute = resolve(join(process.cwd(), normalize(fileUrl).replace(/^[/\\]+/, '')));
+      // 경로조작된 fileUrl이 디스크 임의 경로를 지우지 못하도록 UPLOAD_DIR 하위만 허용
+      if (!absolute.startsWith(resolve(UPLOAD_DIR))) return;
+      await unlink(absolute);
     } catch {
       // 파일이 이미 없어도 DB 정합성 삭제가 우선이므로 무시한다
     }

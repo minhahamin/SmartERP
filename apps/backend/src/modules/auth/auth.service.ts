@@ -3,6 +3,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { seedDefaultRoles } from '../../common/seed/default-roles';
+import { retryOnDuplicate } from '../../common/utils/retry-on-duplicate';
 import { AuthTokenService } from './auth-token.service';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
@@ -54,32 +55,36 @@ export class AuthService {
 
   /** docs/02 2.4 — 최초 가입자는 회사(Tenant)를 새로 만들고 자동으로 ADMIN 역할을 부여받는다 */
   async register(dto: RegisterDto): Promise<IssuedTokens> {
-    const existingCompany = await this.prisma.company.findUnique({ where: { bizRegNo: dto.bizRegNo } });
-    if (existingCompany) {
-      throw new AppException('COMPANY_ALREADY_EXISTS', '이미 등록된 사업자등록번호입니다.', 409);
-    }
+    return retryOnDuplicate(async () => {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const company = await tx.company.create({
+          data: { name: dto.companyName, bizRegNo: dto.bizRegNo, plan: 'FREE' },
+        });
+        const roleIdByName = await seedDefaultRoles(tx as never, company.id);
+        const passwordHash = await bcrypt.hash(dto.password, 12);
+        await tx.user.create({
+          data: {
+            companyId: company.id,
+            employeeNo: 'E-1000',
+            email: dto.email,
+            passwordHash,
+            name: dto.adminName,
+            hireDate: new Date(),
+            roleId: roleIdByName.ADMIN,
+          },
+        });
+        return company;
+      });
 
-    const company = await this.prisma.company.create({
-      data: { name: dto.companyName, bizRegNo: dto.bizRegNo, plan: 'FREE' },
+      const user = await this.findActiveUserByEmail(dto.email, created.id);
+      if (!user) throw new AppException('REGISTRATION_FAILED', '회원가입 처리 중 오류가 발생했습니다.', 500);
+      return this.issueTokens(user, false);
+    }).catch((error) => {
+      if ((error as { code?: string })?.code === 'P2002') {
+        throw new AppException('COMPANY_ALREADY_EXISTS', '이미 등록된 사업자등록번호입니다.', 409);
+      }
+      throw error;
     });
-    const roleIdByName = await seedDefaultRoles(this.prisma, company.id);
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-
-    await this.prisma.user.create({
-      data: {
-        companyId: company.id,
-        employeeNo: 'E-1000',
-        email: dto.email,
-        passwordHash,
-        name: dto.adminName,
-        hireDate: new Date(),
-        roleId: roleIdByName.ADMIN,
-      },
-    });
-
-    const user = await this.findActiveUserByEmail(dto.email, company.id);
-    if (!user) throw new AppException('REGISTRATION_FAILED', '회원가입 처리 중 오류가 발생했습니다.', 500);
-    return this.issueTokens(user, false);
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
@@ -119,21 +124,59 @@ export class AuthService {
         await this.invalidateSessions(user.id);
         throw new UnauthorizedException('Refresh Token이 만료되었습니다. 다시 로그인해 주세요.');
       }
-      return this.issueTokens(user, false);
+      // rememberMe 만료 축소 방지: 기존 만료가 15일 초과면 장기 세션으로 유지
+      const rememberMe = user.refreshTokenExpiresAt.getTime() - Date.now() > 15 * 24 * 60 * 60 * 1000;
+      return this.issueTokens(user, rememberMe);
     }
 
     const reused = await this.prisma.user.findFirst({ where: { previousRefreshTokenHash: tokenHash } });
     if (reused) {
-      await this.invalidateSessions(reused.id);
-      throw new UnauthorizedException(
-        'Refresh Token 재사용이 감지되어 모든 세션이 종료되었습니다. 다시 로그인해 주세요.',
-      );
+      // 동시 더블클릭/재시도 1회는 정상 재회전으로 흡수하고, 그 이후의 재사용만 탈취로 간주한다.
+      // (previous 1개만 보관하므로 2회째 재사용은 매칭이 풀려 아래 invalid로 떨어진다)
+      if (!reused.refreshTokenExpiresAt || reused.refreshTokenExpiresAt < new Date()) {
+        await this.invalidateSessions(reused.id);
+        throw new UnauthorizedException('Refresh Token이 만료되었습니다. 다시 로그인해 주세요.');
+      }
+      const fresh = await this.prisma.user.findUnique({
+        where: { id: reused.id },
+        include: { role: true, department: true },
+        omit: { refreshTokenHash: false },
+      });
+      if (!fresh) throw new UnauthorizedException('유효하지 않은 Refresh Token입니다.');
+      const rememberMe =
+        reused.refreshTokenExpiresAt.getTime() - Date.now() > 15 * 24 * 60 * 60 * 1000;
+      return this.issueTokens(fresh, rememberMe);
     }
 
     throw new UnauthorizedException('유효하지 않은 Refresh Token입니다. 다시 로그인해 주세요.');
   }
 
   async logout(userId: string): Promise<void> {
+    await this.invalidateSessions(userId);
+  }
+
+  /**
+   * 비밀번호 찾기 — 계정 열거 방지용으로 존재 여부와 무관하게 success를 반환한다.
+   * 실제 운영에서는 resetToken을 이메일로 발송해야 하며, 여기서는 데모 확인용으로 토큰을 반환한다.
+   */
+  async forgotPassword(email: string): Promise<{ success: true; resetToken: string | null }> {
+    const user = await this.prisma.user.findFirst({ where: { email, status: 'ACTIVE' } });
+    if (!user) return { success: true, resetToken: null };
+    return { success: true, resetToken: this.tokenService.signPasswordResetToken(user.id) };
+  }
+
+  async resetPassword(resetToken: string, newPassword: string): Promise<void> {
+    let userId: string;
+    try {
+      userId = this.tokenService.verifyPasswordResetToken(resetToken);
+    } catch {
+      throw new UnauthorizedException('재설정 토큰이 유효하지 않거나 만료되었습니다.');
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
     await this.invalidateSessions(userId);
   }
 

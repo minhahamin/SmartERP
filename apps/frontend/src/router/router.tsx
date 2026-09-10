@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
-import { ProtectedLayout } from '@/components/layout/protected-layout';
+import { ProtectedLayout, RequireRole } from '@/components/layout/protected-layout';
+import { ErrorBoundary } from '@/components/common/error-boundary';
 import { ROUTES } from '@/config/routes';
 import { LoginPage } from '@/pages/login/login-page';
 import { SignupPage } from '@/pages/signup/signup-page';
@@ -48,7 +49,14 @@ export const router = createBrowserRouter([
       { path: ROUTES.payroll, element: <PayrollPage /> },
       { path: ROUTES.schedule, element: <SchedulePage /> },
       { path: ROUTES.departments, element: <DepartmentsPage /> },
-      { path: ROUTES.permissions, element: <PermissionsPage /> },
+      {
+        path: ROUTES.permissions,
+        element: (
+          <RequireRole roles={['ADMIN']}>
+            <PermissionsPage />
+          </RequireRole>
+        ),
+      },
       { path: ROUTES.partners, element: <PartnersPage /> },
       { path: ROUTES.salesOrders, element: <SalesOrdersPage /> },
       { path: ROUTES.products, element: <ProductsPage /> },
@@ -65,5 +73,10 @@ export const router = createBrowserRouter([
   {
     path: '*',
     element: <NotFoundPage />,
+    errorElement: (
+      <ErrorBoundary>
+        <NotFoundPage />
+      </ErrorBoundary>
+    ),
   },
 ]);

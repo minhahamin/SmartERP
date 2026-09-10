@@ -18,7 +18,10 @@ interface ToastState {
 const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   push: (item) => {
-    const id = crypto.randomUUID();
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     set((state) => ({ toasts: [...state.toasts, { ...item, id }] }));
     setTimeout(() => {
       set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));

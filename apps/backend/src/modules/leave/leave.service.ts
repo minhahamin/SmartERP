@@ -161,8 +161,12 @@ export class LeaveService {
   }
 
   async cancel(id: string, requester: AuthUser) {
-    const request = await this.prisma.leaveRequest.findUnique({ where: { id } });
-    if (!request) throw new NotFoundException('휴가 신청을 찾을 수 없습니다.');
+    const request = await this.prisma.leaveRequest.findUnique({
+      where: { id },
+      include: { user: { select: { companyId: true } } },
+    });
+    if (!request || request.user.companyId !== requester.companyId)
+      throw new NotFoundException('휴가 신청을 찾을 수 없습니다.');
     if (request.userId !== requester.sub)
       throw new ForbiddenException('본인의 휴가 신청만 취소할 수 있습니다.');
     if (request.status !== 'PENDING') throw new BadRequestException('대기 중인 신청만 취소할 수 있습니다.');
@@ -208,8 +212,14 @@ export class LeaveService {
   }
 
   private async transitionStatus(id: string, status: 'APPROVED' | 'REJECTED', requester: AuthUser) {
-    const request = await this.prisma.leaveRequest.findUnique({ where: { id } });
-    if (!request) throw new NotFoundException('휴가 신청을 찾을 수 없습니다.');
+    // 승인/반려 권한은 서비스 레벨에서도 강제 (컨트롤러 가드 우회 대비)
+    await this.policy.assertAccess(requester, 'LEAVE', 'APPROVE');
+    const request = await this.prisma.leaveRequest.findUnique({
+      where: { id },
+      include: { user: { select: { companyId: true } } },
+    });
+    if (!request || request.user.companyId !== requester.companyId)
+      throw new NotFoundException('휴가 신청을 찾을 수 없습니다.');
     if (request.status !== 'PENDING') throw new BadRequestException('이미 처리된 신청입니다.');
 
     return this.prisma.leaveRequest.update({ where: { id }, data: { status, approverId: requester.sub } });

@@ -41,6 +41,18 @@ export class StockMovementsService {
    */
   async create(dto: CreateStockMovementDto, requester: AuthUser) {
     const delta = dto.type === 'OUT' ? -dto.quantity : dto.quantity;
+    const [product, warehouse] = await Promise.all([
+      this.prisma.product.findFirst({
+        where: { id: dto.productId, companyId: requester.companyId },
+        select: { id: true },
+      }),
+      this.prisma.warehouse.findFirst({
+        where: { id: dto.warehouseId, companyId: requester.companyId },
+        select: { id: true },
+      }),
+    ]);
+    if (!product) throw new AppException('PRODUCT_NOT_FOUND', '소속 회사의 제품이 아닙니다.', 404);
+    if (!warehouse) throw new AppException('WAREHOUSE_NOT_FOUND', '소속 회사의 창고가 아닙니다.', 404);
 
     return this.prisma.$transaction(
       async (tx) => {

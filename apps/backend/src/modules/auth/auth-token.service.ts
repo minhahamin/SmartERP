@@ -42,4 +42,22 @@ export class AuthTokenService {
       : Number(this.config.get('REFRESH_TOKEN_EXPIRES_DAYS') ?? 14);
     return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   }
+
+  /** 비밀번호 재설정용 단기 JWT (15분, purpose=reset) — 초대/찾기 플로우용 */
+  signPasswordResetToken(userId: string): string {
+    return this.jwtService.sign(
+      { sub: userId, purpose: 'password-reset' },
+      { secret: this.config.get<string>('JWT_ACCESS_SECRET'), expiresIn: '15m' as never },
+    );
+  }
+
+  verifyPasswordResetToken(token: string): string {
+    const payload = this.jwtService.verify<{ sub: string; purpose: string }>(token, {
+      secret: this.config.get<string>('JWT_ACCESS_SECRET'),
+    });
+    if (payload.purpose !== 'password-reset' || !payload.sub) {
+      throw new Error('invalid reset token');
+    }
+    return payload.sub;
+  }
 }

@@ -18,4 +18,12 @@ server {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
+
+    # 동일 오리진 /api/v1 폴백 — VITE_API_BASE_URL 미주입 시에도 JSON 대신 index.html 반환 방지.
+    # Railway Variables에 BACKEND_URL=http://backend.railway.internal:3000 추가 필요.
+    location /api/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
 }

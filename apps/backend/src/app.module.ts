@@ -31,10 +31,12 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
 import { RagModule } from './modules/rag/rag.module';
 import { AiChatModule } from './modules/ai-chat/ai-chat.module';
 import { SearchModule } from './modules/search/search.module';
+import { AuditLogModule } from './modules/audit-log/audit-log.module';
+import { validateEnv } from './config/env.validation';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 100 }] }),
     PrismaModule,
     CommonModule,
@@ -60,12 +62,13 @@ import { SearchModule } from './modules/search/search.module';
     RagModule,
     AiChatModule,
     SearchModule,
+    AuditLogModule,
   ],
   providers: [
-    // docs/12.5 — 1차: 인증(JwtAuthGuard) → 2차: 권한(PermissionsGuard) → 3차: Throttle
+    // DDoS가 인증 DB 조회보다 먼저 차단되도록 Throttle을 맨 앞에 둔다
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
     // docs/08.1 — 공통 응답 envelope, docs/07 7.6 #7 — 민감 액션 AuditLog 비동기 기록
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor },

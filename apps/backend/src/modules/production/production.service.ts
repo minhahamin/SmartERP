@@ -6,6 +6,7 @@ import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { CreateProductionOrderDto } from './dto/production-order.dto';
 import { ProductionOrderQueryDto } from './dto/production-order-query.dto';
 import { UpdateProductionStatusDto } from './dto/update-production-status.dto';
+import { retryOnDuplicate } from '../../common/utils/retry-on-duplicate';
 
 const FULL_ACCESS_ROLES = ['ADMIN'];
 
@@ -49,16 +50,18 @@ export class ProductionService {
   }
 
   async create(dto: CreateProductionOrderDto, requester: AuthUser) {
-    const orderNo = await this.nextOrderNo(requester.companyId);
-    return this.prisma.productionOrder.create({
-      data: {
-        ...dto,
-        companyId: requester.companyId,
-        startDate: new Date(dto.startDate),
-        dueDate: new Date(dto.dueDate),
-        orderNo,
-        managerId: requester.roleName === 'ADMIN' ? dto.managerId : requester.sub,
-      },
+    return retryOnDuplicate(async () => {
+      const orderNo = await this.nextOrderNo(requester.companyId);
+      return this.prisma.productionOrder.create({
+        data: {
+          ...dto,
+          companyId: requester.companyId,
+          startDate: new Date(dto.startDate),
+          dueDate: new Date(dto.dueDate),
+          orderNo,
+          managerId: requester.roleName === 'ADMIN' ? dto.managerId : requester.sub,
+        },
+      });
     });
   }
 
@@ -68,6 +71,7 @@ export class ProductionService {
     this.policy.assertOwnerOrRole(requester, order.managerId ?? '', FULL_ACCESS_ROLES);
 
     if (dto.status === 'COMPLETED') {
+      if (order.status === 'COMPLETED') return order; // 멱등: 중복 완료는 이중 입고 없이 반환
       if (!order.warehouseId)
         throw new BadRequestException('완료 처리하려면 입고 창고를 먼저 지정해야 합니다.');
       const producedQty = dto.producedQty ?? order.plannedQty;

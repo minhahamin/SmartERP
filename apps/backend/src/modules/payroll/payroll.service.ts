@@ -84,8 +84,8 @@ export class PayrollService {
     return this.findAll({ year: dto.year, month: dto.month, page: 1, limit: 100 }, requester);
   }
 
-  async update(id: string, dto: UpdatePayrollDto) {
-    const payroll = await this.findOrThrow(id);
+  async update(id: string, dto: UpdatePayrollDto, requester: AuthUser) {
+    const payroll = await this.findOrThrow(id, requester);
     if (payroll.status !== 'DRAFT') {
       throw new AppException(
         'PAYROLL_ALREADY_CONFIRMED',
@@ -102,8 +102,8 @@ export class PayrollService {
   }
 
   /** docs/08.1 — 상태 전이 액션은 이미 해당 상태인 경우 200으로 현재 상태를 반환(멱등) */
-  async confirm(id: string) {
-    const payroll = await this.findOrThrow(id);
+  async confirm(id: string, requester: AuthUser) {
+    const payroll = await this.findOrThrow(id, requester);
     if (payroll.status === 'CONFIRMED') return payroll;
     if (payroll.status === 'PAID') {
       throw new AppException('PAYROLL_ALREADY_CONFIRMED', '이미 지급 완료된 급여입니다.', 409);
@@ -114,8 +114,8 @@ export class PayrollService {
     });
   }
 
-  async pay(id: string) {
-    const payroll = await this.findOrThrow(id);
+  async pay(id: string, requester: AuthUser) {
+    const payroll = await this.findOrThrow(id, requester);
     if (payroll.status === 'PAID') return payroll;
     if (payroll.status !== 'CONFIRMED') {
       throw new AppException('PAYROLL_NOT_CONFIRMED', '확정되지 않은 급여는 지급 처리할 수 없습니다.', 409);
@@ -124,15 +124,22 @@ export class PayrollService {
   }
 
   async getPayslip(id: string, requester: AuthUser) {
-    const payroll = await this.findOrThrow(id);
+    const payroll = await this.findOrThrow(id, requester);
     await this.policy.assertAccess(requester, 'PAYROLL', 'READ', payroll.userId);
     // PDF 렌더링은 범위 밖(docs 07/08/12/13/14에 PDF 엔진 명시 없음) — 명세서 데이터를 그대로 반환
     return payroll;
   }
 
-  private async findOrThrow(id: string): Promise<Payroll> {
-    const payroll = await this.prisma.payroll.findUnique({ where: { id } });
+  /** 테넌트 격리: Payroll에 companyId가 없으므로 소유 User 조인으로 강제한다 */
+  private async findOrThrow(id: string, requester?: AuthUser): Promise<Payroll> {
+    const payroll = await this.prisma.payroll.findUnique({
+      where: { id },
+      include: { user: { select: { companyId: true } } },
+    });
     if (!payroll) throw new NotFoundException('급여 항목을 찾을 수 없습니다.');
+    if (requester && payroll.user.companyId !== requester.companyId) {
+      throw new NotFoundException('급여 항목을 찾을 수 없습니다.');
+    }
     return payroll;
   }
 }

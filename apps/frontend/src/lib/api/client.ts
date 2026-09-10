@@ -24,6 +24,14 @@ type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 /** 동시에 들어온 401들이 /auth/refresh를 중복 호출하지 않도록 진행 중인 재발급 Promise를 공유한다 */
 let refreshPromise: Promise<string> | null = null;
 
+/** 부팅 중 refresh와 401 인터셉터 refresh의 경합 방지 — bootstrap 완료까지 대기 */
+async function waitForBootstrap(): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    if (!useAuthStore.getState().isInitializing) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -40,6 +48,16 @@ apiClient.interceptors.response.use(
 
     config._retried = true;
     try {
+      // 앱 시작 직후 만료 세션 + 첫 쿼리 401이 겹치면 동일 쿠키로 2연타 → RT 재사용 오탐.
+      // bootstrap이 진행 중이면 먼저 완료를 기다리고, 복원된 토큰으로 재시도한다.
+      await waitForBootstrap();
+      const currentToken = useAuthStore.getState().accessToken;
+      const retriedWithFreshBoot = (config as { _bootRetried?: boolean })._bootRetried;
+      if (currentToken && !retriedWithFreshBoot) {
+        (config as { _bootRetried?: boolean })._bootRetried = true;
+        config.headers.Authorization = `Bearer ${currentToken}`;
+        return apiClient(config);
+      }
       refreshPromise ??= apiClient
         .post<{ data: { accessToken: string } }>('/auth/refresh')
         .then((res) => res.data.data.accessToken)

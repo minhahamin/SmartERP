@@ -13,8 +13,10 @@
 ```
 - **페이지네이션**: Query `page`(기본 1), `limit`(기본 20, 최대 100), 응답 `meta`에 `total/totalPages` 포함. 목록형 GET 전체에 일괄 적용.
 - **필터/정렬**: Query `sort=-createdAt`(`-`는 내림차순), 도메인별 화이트리스트 필터 파라미터만 허용(임의 컬럼 인젝션 방지)
-- **에러 코드 체계**: `{DOMAIN}_{REASON}` 스네이크 대문자 (`PAYROLL_ALREADY_CONFIRMED`, `STOCK_INSUFFICIENT`, `AUTH_INVALID_CREDENTIALS`) — 프론트에서 코드 기준 분기, message는 사용자 노출용 한글 문구
-- **멱등성**: 상태 전이 액션(`confirm`, `pay`)은 이미 해당 상태인 경우 200으로 현재 상태를 반환(에러 아님)하여 중복 클릭에 안전
+- **에러 코드 체계**: `{DOMAIN}_{REASON}` 스네이크 대문자 (`PAYROLL_ALREADY_CONFIRMED`, `STOCK_INSUFFICIENT`, `AUTH_INVALID_CREDENTIALS`) — 프론트에서 코드 기준 분기, message는 사용자 노출용 한글 문구. Prisma 공통 매핑: `P2002→409 DUPLICATE`, `P2025→404 NOT_FOUND` (`http-exception.filter.ts`)
+- **멱등성**: 상태 전이 액션(`confirm`, `pay`, 생산 `COMPLETED`)은 이미 해당 상태인 경우 200으로 현재 상태를 반환(에러 아님)하여 중복 클릭에 안전
+- **검증**: `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })` — 미정의 필드는 400 `VALIDATION_ERROR`로 거부
+- **주문번호 경합**: `count()+1` 생성(`E-/SO-/PO-`)은 동시요청 시 `P2002` 재시도 헬퍼(`retryOnDuplicate`, 최대 3회)로 흡수
 
 ## 8.2 NestJS 모듈 구조
 
@@ -113,10 +115,16 @@ export class PermissionsGuard implements CanActivate {
 
 | Method | Path | 설명 | 권한 | Request | Response |
 |---|---|---|---|---|---|
-| POST | `/auth/login` | 로그인 | Public | `{ email, password }` | `{ accessToken, refreshToken, user }` |
-| POST | `/auth/refresh` | 토큰 재발급 | Public(Refresh Token 필요) | `{ refreshToken }` | `{ accessToken, refreshToken }` |
+| POST | `/auth/login` | 로그인 | Public (분당 5회 Throttle) | `{ email, password, rememberMe? }` | `{ accessToken, user }` + `Set-Cookie(refreshToken, httpOnly)` |
+| POST | `/auth/register` | 회사 최초 가입 | Public (분당 5회 Throttle) | `{ companyName, bizRegNo, adminName, email, password }` | `{ accessToken, user }` + `Set-Cookie(refreshToken, httpOnly)` |
+| POST | `/auth/refresh` | 토큰 재발급 (쿠키 기반) | Public + Throttle 10/min | Cookie `refreshToken` | `{ accessToken }` + `Set-Cookie(새 refreshToken)` |
 | POST | `/auth/logout` | 로그아웃(Refresh Token 무효화) | 인증 필요 | - | `{ success: true }` |
 | GET | `/auth/me` | 내 프로필 + 권한 조회 | 인증 필요 | - | `{ id, name, role, permissions[] }` |
+| POST | `/auth/change-password` | 비밀번호 변경 | 인증 필요 | `{ currentPassword, newPassword }` | `{ success: true }` |
+| POST | `/auth/forgot-password` | 비밀번호 찾기 (재설정 토큰 발급) | Public (분당 5회, 열거 방지 generic 응답) | `{ email }` | `{ success: true, resetToken }` (운영은 이메일 발송) |
+| POST | `/auth/reset-password` | 비밀번호 재설정 | Public (분당 5회) | `{ resetToken, newPassword }` | `{ success: true }` |
+
+> Refresh Token은 응답 body에 포함하지 않고 `httpOnly + Secure(운영) + SameSite=Strict + Path=/` 쿠키로만 전달한다. `POST /auth/refresh`는 body 없이 쿠키로 재발급한다.
 
 ### 8.4.2 직원 관리 (`/users`)
 
@@ -149,10 +157,10 @@ export class CreateUserDto {
 | GET | `/payrolls?year=&month=` | 월별 급여 목록 | `PAYROLL:READ` |
 | GET | `/payrolls/me?year=` | 본인 급여 이력 | 인증 필요(본인 한정) |
 | POST | `/payrolls/generate` | 월별 급여 일괄 생성(DRAFT) | `PAYROLL:CREATE` |
-| PATCH | `/payrolls/:id` | 수당/공제 수정(DRAFT만 가능) | `PAYROLL:UPDATE` |
-| POST | `/payrolls/:id/confirm` | 확정(DRAFT→CONFIRMED) | `PAYROLL:APPROVE` |
-| POST | `/payrolls/:id/pay` | 지급 처리(CONFIRMED→PAID) | `PAYROLL:APPROVE` |
-| GET | `/payrolls/:id/payslip` | 급여명세서 PDF 다운로드 | `PAYROLL:READ` 또는 본인 |
+| PATCH | `/payrolls/:id` | 수당/공제 수정(DRAFT만 가능, 테넌트 격리 강제) | `PAYROLL:UPDATE` |
+| POST | `/payrolls/:id/confirm` | 확정(DRAFT→CONFIRMED, 멱등 — 이미 CONFIRMED면 200 반환) | `PAYROLL:APPROVE` |
+| POST | `/payrolls/:id/pay` | 지급 처리(CONFIRMED→PAID, 멱등) | `PAYROLL:APPROVE` |
+| GET | `/payrolls/:id/payslip` | 급여명세서 데이터 조회 (PDF 렌더링은 범위 밖 — 명세서 JSON 반환) | `PAYROLL:READ` 또는 본인 |
 
 ### 8.4.4 재고/입출고/생산
 
@@ -171,10 +179,14 @@ export class CreateUserDto {
 | Method | Path | 설명 | 권한 |
 |---|---|---|---|
 | GET | `/documents?category=&search=` | 목록 | `DOCUMENT:READ` |
-| POST | `/documents` | 업로드(multipart) → 비동기 RAG 색인 트리거 | `DOCUMENT:CREATE` |
+| POST | `/documents` | 업로드(multipart, pdf/이미지/office/txt/csv 화이트리스트, 20MB) → 비동기 RAG 색인 트리거 | `DOCUMENT:CREATE` |
 | GET | `/documents/:id` | 상세/메타데이터 | `DOCUMENT:READ` |
+| GET | `/documents/:id/file` | 인증 기반 원본 다운로드 (`/uploads` 직접 접근 대신 사용 권장) | `DOCUMENT:READ` |
 | POST | `/documents/:id/versions` | 새 버전 업로드 | `DOCUMENT:UPDATE` |
-| GET | `/documents/:id/summary` | AI 요약 결과 조회 | `DOCUMENT:READ` |
+| GET | `/documents/:id/summary` | AI 요약 결과 조회 (PENDING→진행중 메시지, FAILED→실패 메시지, DONE→요약) | `DOCUMENT:READ` |
+| POST | `/documents/bulk-delete` | 선택 삭제 | `DOCUMENT:DELETE` |
+| DELETE | `/documents/:id` | 단일 삭제 | `DOCUMENT:DELETE` |
+| DELETE | `/documents` | 전체 삭제 | `DOCUMENT:DELETE` |
 
 ### 8.4.6 AI 챗봇 (`/ai`)
 
@@ -183,8 +195,17 @@ export class CreateUserDto {
 | GET | `/ai/sessions` | 내 대화 세션 목록 | 인증 필요 |
 | POST | `/ai/sessions` | 새 세션 생성 | 인증 필요 |
 | GET | `/ai/sessions/:id/messages` | 세션 메시지 이력 | 인증 필요(본인 세션만) |
-| POST | `/ai/sessions/:id/messages` | 질의 전송 → SSE 스트리밍 응답 | 인증 필요 |
+| POST | `/ai/sessions/:id/messages` | 질의 전송 → 완료된 답변 반환 (SSE 스트리밍은 향후 과제, 현재 일반 POST) | 인증 필요 |
 | GET | `/ai/faq?category=` | 게시된 FAQ 목록 | 인증 필요 |
+| POST | `/ai/faq` | FAQ 초안 생성 (Human-in-the-loop 검수 대기, `isPublished=false`) | `DOCUMENT:CREATE` |
+| POST | `/ai/faq/:id/publish` | FAQ 검수 후 게시 | `DOCUMENT:UPDATE` |
+| POST | `/ai/faq/:id/reject` | FAQ 반려 (초안 삭제) | `DOCUMENT:UPDATE` |
+
+### 8.4.7 감사로그 (`/audit-logs`)
+
+| Method | Path | 설명 | 권한 |
+|---|---|---|---|
+| GET | `/audit-logs?resource=&action=&page=&limit=` | 감사로그 조회 (테넌트 격리, 최신순, ADMIN 전용) | `PERMISSION:READ` |
 
 > AI 엔드포인트는 별도의 `@RequirePermissions`를 적용하지 않는다 — 대신 메시지 처리 파이프라인 내부에서 Function Calling 인자에 `req.user`의 권한 범위를 강제 주입한다(상세: [09-ai-chatbot-design.md](09-ai-chatbot-design.md) 4장). 즉 "엔드포인트 권한"이 아니라 "데이터 접근 시점의 권한"으로 제어된다.
 

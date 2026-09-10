@@ -178,19 +178,28 @@ export class AttendanceService {
     });
   }
 
-  create(dto: CreateAttendanceDto) {
-    return this.prisma.attendance.create({
-      data: {
-        userId: dto.userId,
-        workDate: new Date(dto.workDate),
-        checkInAt: dto.checkInAt ? new Date(dto.checkInAt) : undefined,
-        checkOutAt: dto.checkOutAt ? new Date(dto.checkOutAt) : undefined,
-        status: dto.status,
-      },
-    });
+  create(dto: CreateAttendanceDto, requester: AuthUser) {
+    return this.assertSameCompany(dto.userId, requester).then(() =>
+      this.prisma.attendance.create({
+        data: {
+          userId: dto.userId,
+          workDate: new Date(dto.workDate),
+          checkInAt: dto.checkInAt ? new Date(dto.checkInAt) : undefined,
+          checkOutAt: dto.checkOutAt ? new Date(dto.checkOutAt) : undefined,
+          status: dto.status,
+        },
+      }),
+    );
   }
 
-  update(id: string, dto: UpdateAttendanceDto) {
+  async update(id: string, dto: UpdateAttendanceDto, requester: AuthUser) {
+    const existing = await this.prisma.attendance.findUnique({
+      where: { id },
+      include: { user: { select: { companyId: true } } },
+    });
+    if (!existing || existing.user.companyId !== requester.companyId) {
+      throw new BadRequestException('근태 기록을 찾을 수 없습니다.');
+    }
     return this.prisma.attendance.update({
       where: { id },
       data: {
@@ -199,5 +208,13 @@ export class AttendanceService {
         ...(dto.status ? { status: dto.status } : {}),
       },
     });
+  }
+
+  private async assertSameCompany(userId: string, requester: AuthUser): Promise<void> {
+    const target = await this.prisma.user.findFirst({
+      where: { id: userId, companyId: requester.companyId },
+      select: { id: true },
+    });
+    if (!target) throw new BadRequestException('근태 기록을 찾을 수 없습니다.');
   }
 }

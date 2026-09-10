@@ -133,14 +133,12 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # AI 챗봇 SSE 스트리밍을 위한 버퍼링 해제
-        proxy_buffering off;
         proxy_read_timeout 120s;
     }
-}
 ```
 
-- `proxy_buffering off`는 AI 챗봇의 SSE 스트리밍 응답이 Nginx 버퍼에 모였다가 한꺼번에 전달되지 않고 토큰 단위로 즉시 클라이언트에 전달되도록 하는 핵심 설정이다.
+- AI 챗봇은 현재 SSE 스트리밍이 아닌 일반 POST(완성된 답변 반환)이므로 `proxy_buffering off`는 불필요 — 향후 스트리밍 재도입 시 복원.
+- Railway 배포(`apps/frontend/Dockerfile` + `nginx.conf.template`): `location /api/`가 `${BACKEND_URL}`로 프록시하므로 프론트는 동일 오리진 `/api/v1` 호출. 빌드 시 `VITE_API_BASE_URL` 미주입에 대비해 `.env.production` 기본값(`/api/v1`)을 둔다. Railway Variables에 `BACKEND_URL=http://backend.railway.internal:3000` 설정 필요.
 
 ## 14.5 GitHub Actions CI/CD
 

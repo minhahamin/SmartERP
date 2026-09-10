@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
@@ -13,10 +13,14 @@ export class InventoryService {
     const where: Record<string, unknown> = { product: { companyId: requester.companyId } };
     if (query.warehouseId) where.warehouseId = query.warehouseId;
 
+    // belowSafetyStock은 quantity <= product.safetyStock 비교가 필요해 Prisma where로
+    // 직접 표현이 안 되므로 범위를 창고/테넌트로 좁혀 최대 5000건까지만 읽고 메모리 필터한다.
+    const capped = query.belowSafetyStock ? { skip: 0, take: 5000 } : { skip: (query.page - 1) * query.limit, take: query.limit };
     let items = await this.prisma.inventory.findMany({
       where,
       include: { product: true, warehouse: true },
       orderBy: { updatedAt: 'desc' },
+      ...capped,
     });
 
     if (query.belowSafetyStock) {
@@ -30,7 +34,18 @@ export class InventoryService {
 
   /** docs/08.4.4 — 재고 실사 확정: 실사 수량과 시스템 수량의 차이를 ADJUST StockMovement로 기록하고 Inventory를 갱신한다 */
   async stockTake(dto: StockTakeDto, requester: AuthUser) {
-    const beforeMap = new Map(
+    const warehouse = await this.prisma.warehouse.findFirst({
+      where: { id: dto.warehouseId, companyId: requester.companyId },
+      select: { id: true },
+    });
+    if (!warehouse) throw new NotFoundException('소속 회사의 창고가 아닙니다.');
+    const ownedProducts = await this.prisma.product.findMany({
+      where: { id: { in: dto.items.map((i) => i.productId) }, companyId: requester.companyId },
+      select: { id: true },
+    });
+    if (ownedProducts.length !== new Set(dto.items.map((i) => i.productId)).size) {
+      throw new NotFoundException('소속 회사의 제품이 아닌 품목이 포함되어 있습니다.');
+    }    const beforeMap = new Map(
       (
         await this.prisma.inventory.findMany({
           where: { warehouseId: dto.warehouseId, productId: { in: dto.items.map((i) => i.productId) } },

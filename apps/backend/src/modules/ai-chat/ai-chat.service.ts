@@ -85,6 +85,37 @@ export class AiChatService {
     });
   }
 
+  /** Human-in-the-loop: AI/사용자가 올린 초안은 isPublished=false로 대기, 검수 후 게시 */
+  async createFaqDraft(
+    dto: { question: string; answer: string; category?: string },
+    requester: AuthUser,
+  ) {
+    return this.prisma.faqItem.create({
+      data: {
+        companyId: requester.companyId,
+        question: dto.question,
+        answer: dto.answer,
+        category: dto.category,
+        sourceType: 'MANUAL',
+        isPublished: false,
+      },
+    });
+  }
+
+  async publishFaq(id: string, requester: AuthUser) {
+    const item = await this.prisma.faqItem.findFirst({ where: { id, companyId: requester.companyId } });
+    if (!item) throw new NotFoundException('FAQ를 찾을 수 없습니다.');
+    if (item.isPublished) return item;
+    return this.prisma.faqItem.update({ where: { id }, data: { isPublished: true } });
+  }
+
+  async rejectFaq(id: string, requester: AuthUser) {
+    const item = await this.prisma.faqItem.findFirst({ where: { id, companyId: requester.companyId } });
+    if (!item) throw new NotFoundException('FAQ를 찾을 수 없습니다.');
+    await this.prisma.faqItem.delete({ where: { id } });
+    return { success: true };
+  }
+
   private async generateReply(sessionId: string, userMessage: string, requester: AuthUser) {
     if (!this.gemini) {
       return this.prisma.chatMessage.create({

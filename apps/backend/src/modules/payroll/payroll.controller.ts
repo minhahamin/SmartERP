@@ -39,8 +39,8 @@ export class PayrollController {
   @RequirePermissions('PAYROLL', 'UPDATE')
   @Audit('PAYROLL_UPDATE', 'PAYROLL')
   @ApiOperation({ summary: '수당/공제 수정(DRAFT만 가능)' })
-  update(@Param('id') id: string, @Body() dto: UpdatePayrollDto) {
-    return this.payrollService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdatePayrollDto, @CurrentUser() user: AuthUser) {
+    return this.payrollService.update(id, dto, user);
   }
 
   @Post(':id/confirm')
@@ -50,8 +50,8 @@ export class PayrollController {
   @ApiOperation({
     summary: '확정 (DRAFT → CONFIRMED, 이미 확정된 경우 200으로 현재 상태 반환 — docs/08.1 멱등성)',
   })
-  confirm(@Param('id') id: string) {
-    return this.payrollService.confirm(id);
+  confirm(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.payrollService.confirm(id, user);
   }
 
   @Post(':id/pay')
@@ -61,8 +61,8 @@ export class PayrollController {
   @ApiOperation({
     summary: '지급 처리 (CONFIRMED → PAID, 이미 지급된 경우 200으로 현재 상태 반환 — docs/08.1 멱등성)',
   })
-  pay(@Param('id') id: string) {
-    return this.payrollService.pay(id);
+  pay(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.payrollService.pay(id, user);
   }
 
   @Get(':id/payslip')

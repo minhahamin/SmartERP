@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 import { queryClient } from '@/lib/query-client';
 import { router } from '@/router/router';
 import { Toaster } from '@/components/ui/toaster';
+import { ErrorBoundary } from '@/components/common/error-boundary';
 import { useAuthStore } from '@/stores/auth-store';
 
 function App() {
@@ -15,14 +16,20 @@ function App() {
   }, [bootstrap]);
 
   if (isInitializing) {
-    return null;
+    return (
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', color: '#666' }}>
+        세션을 복원하는 중입니다…
+      </div>
+    );
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <Toaster />
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

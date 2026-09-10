@@ -47,7 +47,9 @@ sequenceDiagram
 - **형태**: JWT가 아닌 **opaque random token**(`crypto.randomBytes(64).toString('hex')`) — Refresh Token은 클라이언트가 내용을 해석할 필요가 없으므로 자체 정보를 담지 않는 불투명 토큰으로 발급해 페이로드 위조/디코딩 시도 자체를 의미 없게 만든다.
 - **저장**: DB에는 원문이 아닌 `sha256` 해시(`User.refreshTokenHash`)만 저장 — DB 유출 시에도 토큰 자체는 복구 불가능.
 - **만료**: 기본 14일, "로그인 유지" 체크 시 30일.
-- **회전(Rotation)**: `/auth/refresh` 호출마다 기존 토큰을 즉시 폐기하고 신규 토큰을 발급한다. **이미 폐기된(rotation으로 무효화된) 토큰이 재사용되면 토큰 탈취로 간주**하고 해당 사용자의 모든 세션을 강제 종료(`refreshTokenHash = null`) 후 재로그인을 요구한다.
+- **회전(Rotation)**: `/auth/refresh` 호출마다 기존 토큰을 즉시 폐기하고 신규 토큰을 발급한다. 네트워크 재시도/더블클릭으로 동일 토큰이 2연타되는 경우 1회는 정상 재회전으로 흡수하고(UX 로그아웃 방지), 그 이후의 재사용만 탈취로 간주한다 (`previousRefreshTokenHash` 1개만 보관하므로 2회째 재사용은 매칭이 풀려 invalid로 처리). 만료된 토큰 재사용은 전 세션 파기 후 재로그인 요구.
+- **rememberMe 유지**: 재발급 시 기존 만료일이 15일을 초과하면 장기(30일) 세션으로 유지 — 기존 구현의 "항상 14일로 축소" 버그 수정.
+- **Throttle**: `/auth/refresh`에도 분당 10회 제한 적용 (무차별 재발급 방지).
 - **클라이언트 저장 위치**: `httpOnly + Secure + SameSite=Strict` 쿠키. JavaScript에서 접근 불가능하므로 XSS로 Refresh Token이 탈취될 가능성을 제거한다. Access Token은 메모리(Zustand, 새로고침 시 휘발)에만 보관하여 `localStorage` 기반 토큰 저장의 고전적 XSS 취약점을 피한다.
 
 ## 12.4 RBAC 연계
@@ -59,10 +61,11 @@ JWT는 "신원 증명(누가 로그인했는가)"만 책임지고, "무엇을 �
 ## 12.5 Guard 구조
 
 ```typescript
-// app.module.ts — 전역 인증 가드 등록
+// app.module.ts — 전역 인증 가드 등록 (DDoS가 인증 DB 조회보다 먼저 차단되도록 Throttle 선행)
 providers: [
-  { provide: APP_GUARD, useClass: JwtAuthGuard },      // 1차: 모든 요청 인증 필수
-  { provide: APP_GUARD, useClass: PermissionsGuard },  // 2차: @RequirePermissions 명시된 라우트만 권한 검사
+  { provide: APP_GUARD, useClass: ThrottlerGuard },  // 1차: 레이트리밋
+  { provide: APP_GUARD, useClass: JwtAuthGuard },      // 2차: 모든 요청 인증 필수
+  { provide: APP_GUARD, useClass: PermissionsGuard },  // 3차: @RequirePermissions 명시된 라우트만 권한 검사
 ]
 ```
 
@@ -84,10 +87,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 ```
 
 ```typescript
-// modules/auth/strategies/jwt.strategy.ts
+// modules/auth/strategies/jwt.strategy.ts — payload를 그대로 신뢰하지 않고 매 요청 신선도 검증
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService) {
+  constructor(config: ConfigService, private readonly prisma: PrismaService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -95,24 +98,36 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload) {
-    return payload; // req.user에 주입됨 (companyId/roleId/departmentId 포함)
+  async validate(payload: AuthUser): Promise<AuthUser> {
+    // 퇴사/비활성·역할/부서 변경을 Access 만료(15m) 전에도 반영
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: { role: { select: { name: true } } },
+    });
+    if (!user || user.status !== 'ACTIVE' || user.companyId !== payload.companyId) {
+      throw new UnauthorizedException('세션이 만료되었거나 권한이 변경되었습니다.');
+    }
+    return {
+      sub: user.id, companyId: user.companyId, roleId: user.roleId,
+      roleName: user.role.name, departmentId: user.departmentId,
+    };
   }
 }
 ```
 
-**가드 실행 순서**: `JwtAuthGuard`(서명/만료 검증) → `PermissionsGuard`(리소스별 권한 검증) → `AuditLogInterceptor`(민감 액션 기록) → Controller. 인증 실패는 401, 권한 부족은 403으로 명확히 구분하여 프론트에서 "로그인 필요" vs "권한 없음" UX를 다르게 처리할 수 있도록 한다.
+**가드 실행 순서**: `ThrottlerGuard`(레이트리밋) → `JwtAuthGuard`(서명/만료+DB 신선도 검증) → `PermissionsGuard`(리소스별 권한 검증) → `AuditLogInterceptor`(민감 액션 기록) → Controller. 인증 실패는 401, 권한 부족은 403으로 명확히 구분하여 프론트에서 "로그인 필요" vs "권한 없음" UX를 다르게 처리할 수 있도록 한다.
 
 ## 12.6 보안 고려사항
 
 | 위협 | 대응 |
 |---|---|
 | 비밀번호 평문 저장 | `bcrypt` (cost factor 12) 해싱, 원문은 메모리에서도 즉시 폐기 |
-| Brute-force 로그인 시도 | `@nestjs/throttler`로 `/auth/login`에 분당 5회 제한 + 5회 실패 시 계정 5분 잠금([3.1.1](03-feature-spec.md#311-로그인-auth)) |
-| Refresh Token 탈취/재사용 | Rotation 전략 + 재사용 탐지 시 전체 세션 강제 종료 |
+| Brute-force 로그인 시도 | `@nestjs/throttler`로 `/auth/login·register·forgot/reset`에 분당 5회, `/auth/refresh`에 분당 10회 제한 (계정 잠금 컬럼은 미구현 — 다음 단계에서 User 실패카운터 또는 Redis 기반 잠금 추가 예정) |
+| Refresh Token 탈취/재사용 | Rotation + 1회 재사용 그레이스(더블클릭 흡수) + 이후 재사용 시 전체 세션 강제 종료 |
 | XSS로 토큰 탈취 | Access Token은 메모리만 사용(휘발성), Refresh Token은 httpOnly 쿠키(JS 접근 불가) |
-| CSRF (쿠키 기반 Refresh) | `SameSite=Strict` + `/auth/refresh` 요청에 커스텀 헤더(`X-Requested-With`) 필수화로 단순 폼 기반 CSRF 차단 |
-| 토큰 페이로드 변조 | HS256 서명 검증(`JWT_ACCESS_SECRET`은 GitHub Actions Secret/EC2 환경변수로만 주입, 코드/이미지에 미포함) |
+| CSRF (쿠키 기반 Refresh) | `SameSite=Strict + Path=/` + 로그아웃 시 동일 속성으로 쿠키 제거 (커스텀 `X-Requested-With` 헤더 강제는 미적용 — SameSite 기반 차단에 의존) |
+| 토큰 페이로드 변조 | HS256 서명 검증(`JWT_ACCESS_SECRET`은 32자 이상 무작위 필수, `validateEnv`로 부팅 시 검증 — 약한 기본값 거부) |
+| 환경변수 미설정 부팅 | `src/config/env.validation.ts`가 `DATABASE_URL/CORS_ORIGIN/JWT_ACCESS_SECRET` 검증 후 부팅 거부 |
 | 권한 변경 지연 반영 | JWT에 권한 캐싱하지 않고 매 요청 DB 조회([12.4](#124-rbac-연계)) |
 | 멀티테넌시 데이터 유출 | JWT의 `companyId`를 모든 Prisma 쿼리의 1차 WHERE 조건으로 강제(서비스 레이어 공통 베이스 클래스에서 강제), 장기적으로 Postgres RLS로 2차 방어 |
 | 민감 액션 추적 | `AuditLog`에 로그인 실패/성공, 권한 변경, 급여 확정 등을 기록하여 사후 감사 대응 |

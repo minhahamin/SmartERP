@@ -42,14 +42,14 @@ export class AttendanceController {
   @Post()
   @RequirePermissions('ATTENDANCE', 'CREATE')
   @ApiOperation({ summary: '근태 수동 등록(HR/Admin 정정)' })
-  create(@Body() dto: CreateAttendanceDto) {
-    return this.attendanceService.create(dto);
+  create(@Body() dto: CreateAttendanceDto, @CurrentUser() user: AuthUser) {
+    return this.attendanceService.create(dto, user);
   }
 
   @Patch(':id')
   @RequirePermissions('ATTENDANCE', 'UPDATE')
   @ApiOperation({ summary: '근태 수정(HR/Admin 정정)' })
-  update(@Param('id') id: string, @Body() dto: UpdateAttendanceDto) {
-    return this.attendanceService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateAttendanceDto, @CurrentUser() user: AuthUser) {
+    return this.attendanceService.update(id, dto, user);
   }
 }

@@ -6,6 +6,7 @@ import { PolicyService } from '../../common/services/policy.service';
 import { paginate, type PaginatedResult } from '../../common/interfaces/paginated-result.interface';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { CreateUserDto } from './dto/create-user.dto';
+import { retryOnDuplicate } from '../../common/utils/retry-on-duplicate';
 import { SELF_EDITABLE_FIELDS, UpdateUserDto } from './dto/update-user.dto';
 import { UserQueryDto } from './dto/user-query.dto';
 
@@ -69,25 +70,32 @@ export class UsersService {
   async create(dto: CreateUserDto, requester: AuthUser) {
     await this.policy.assertAccess(requester, 'USER', 'CREATE');
     const company = await this.prisma.company.findUniqueOrThrow({ where: { id: requester.companyId } });
-    const employeeNo = await this.nextEmployeeNo(requester.companyId);
     const temporaryPassword = randomBytes(6).toString('hex');
     const passwordHash = await bcrypt.hash(temporaryPassword, 12);
 
-    const user = await this.prisma.user.create({
-      data: {
-        ...dto,
-        companyId: company.id,
-        employeeNo,
-        passwordHash,
-        hireDate: new Date(dto.hireDate),
-        mustChangePassword: true,
-      },
+    const user = await retryOnDuplicate(async () => {
+      const employeeNo = await this.nextEmployeeNo(requester.companyId);
+      return this.prisma.user.create({
+        data: {
+          ...dto,
+          companyId: company.id,
+          employeeNo,
+          passwordHash,
+          hireDate: new Date(dto.hireDate),
+          mustChangePassword: true,
+        },
+      });
     });
     // 실제 운영에서는 초기 비밀번호 설정 링크를 이메일로 발송한다(docs/02 2.4) — 메일 발송은 범위 밖이라 임시 비밀번호를 그대로 반환
     return { ...user, temporaryPassword };
   }
 
   async update(id: string, dto: UpdateUserDto, requester: AuthUser) {
+    const target = await this.prisma.user.findFirst({
+      where: { id, companyId: requester.companyId },
+      select: { id: true },
+    });
+    if (!target) throw new NotFoundException('직원을 찾을 수 없습니다.');
     const isSelf = id === requester.sub;
     const hasFullPermission = await this.policy.hasPermission(requester, 'USER', 'UPDATE');
     if (!isSelf && !hasFullPermission) {
@@ -104,6 +112,11 @@ export class UsersService {
 
   async remove(id: string, requester: AuthUser) {
     await this.policy.assertAccess(requester, 'USER', 'DELETE');
+    const target = await this.prisma.user.findFirst({
+      where: { id, companyId: requester.companyId },
+      select: { id: true },
+    });
+    if (!target) throw new NotFoundException('직원을 찾을 수 없습니다.');
     // docs/07 7.6 #2 — 소프트 삭제: 과거 급여/근태 참조 무결성 유지를 위해 행을 삭제하지 않는다
     await this.prisma.user.update({ where: { id }, data: { status: 'RESIGNED' } });
     return { success: true };

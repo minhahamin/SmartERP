@@ -47,6 +47,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('refresh')
   @ApiOperation({ summary: '토큰 재발급 (httpOnly Cookie의 refreshToken 사용, docs/12.1)' })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
@@ -56,13 +57,35 @@ export class AuthController {
     return { accessToken: result.accessToken };
   }
 
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('forgot-password')
+  @ApiOperation({ summary: '비밀번호 찾기 (재설정 토큰 발급 — 운영에서는 이메일 발송)' })
+  async forgotPassword(@Body() body: { email: string }) {
+    return this.authService.forgotPassword(body.email);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('reset-password')
+  @ApiOperation({ summary: '비밀번호 재설정 (단기 토큰 사용)' })
+  async resetPassword(@Body() body: { resetToken: string; newPassword: string }) {
+    await this.authService.resetPassword(body.resetToken, body.newPassword);
+    return { success: true };
+  }
+
   @ApiBearerAuth()
   @HttpCode(200)
   @Post('logout')
   @ApiOperation({ summary: '로그아웃 (Refresh Token 무효화)' })
   async logout(@CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
     await this.authService.logout(user.sub);
-    res.clearCookie(REFRESH_TOKEN_COOKIE);
+    res.clearCookie(REFRESH_TOKEN_COOKIE, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+    });
     return { success: true };
   }
 
@@ -78,6 +101,7 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
+      path: '/',
       expires: expiresAt,
     });
   }

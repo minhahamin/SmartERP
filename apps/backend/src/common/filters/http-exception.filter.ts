@@ -26,6 +26,25 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    // Prisma unique/ Survivior 매핑 — count()+1 주문번호 경합 등의 P2002를 500 대신 409로 반환
+    const prismaCode = (exception as { code?: string })?.code;
+    if (typeof prismaCode === 'string' && prismaCode.startsWith('P')) {
+      if (prismaCode === 'P2002') {
+        response.status(409).json({
+          success: false,
+          error: { code: 'DUPLICATE', message: '이미 존재하는 값입니다. 다시 시도해 주세요.', statusCode: 409 },
+        });
+        return;
+      }
+      if (prismaCode === 'P2025') {
+        response.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: '요청한 리소스를 찾을 수 없습니다.', statusCode: 404 },
+        });
+        return;
+      }
+    }
+
     if (exception instanceof HttpException) {
       const statusCode = exception.getStatus();
       const body = exception.getResponse();

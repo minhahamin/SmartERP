@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { Audit } from '../../common/decorators/audit-log.decorator';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { AiChatService } from './ai-chat.service';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -51,5 +53,32 @@ export class AiChatController {
   @ApiOperation({ summary: '게시된 FAQ 목록' })
   listFaq(@Query('category') category: string | undefined, @CurrentUser() user: AuthUser) {
     return this.aiChatService.listFaq(category, user);
+  }
+
+  @Post('faq')
+  @RequirePermissions('DOCUMENT', 'CREATE')
+  @Audit('FAQ_CREATE', 'FAQ')
+  @ApiOperation({ summary: 'FAQ 초안 생성 (Human-in-the-loop 검수 대기)' })
+  createFaq(
+    @Body() dto: { question: string; answer: string; category?: string },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.aiChatService.createFaqDraft(dto, user);
+  }
+
+  @Post('faq/:id/publish')
+  @RequirePermissions('DOCUMENT', 'UPDATE')
+  @Audit('FAQ_PUBLISH', 'FAQ')
+  @ApiOperation({ summary: 'FAQ 검수 후 게시' })
+  publishFaq(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.aiChatService.publishFaq(id, user);
+  }
+
+  @Post('faq/:id/reject')
+  @RequirePermissions('DOCUMENT', 'UPDATE')
+  @Audit('FAQ_REJECT', 'FAQ')
+  @ApiOperation({ summary: 'FAQ 반려 (초안 삭제)' })
+  rejectFaq(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.aiChatService.rejectFaq(id, user);
   }
 }
