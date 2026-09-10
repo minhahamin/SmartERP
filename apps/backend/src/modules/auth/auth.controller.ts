@@ -82,8 +82,8 @@ export class AuthController {
     await this.authService.logout(user.sub);
     res.clearCookie(REFRESH_TOKEN_COOKIE, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production' || process.env.COOKIE_SAME_SITE === 'none',
+      sameSite: (process.env.COOKIE_SAME_SITE === 'none' ? 'none' : 'strict') as 'none' | 'strict',
       path: '/',
     });
     return { success: true };
@@ -97,10 +97,13 @@ export class AuthController {
   }
 
   private setRefreshCookie(res: Response, refreshToken: string, expiresAt: Date) {
+    // 프론트↔백엔드 도메인이 다르면(직접 호출) SameSite=None+Secure 필요.
+    // 동일 오리진 프록시(/api) 경유면 Strict 유지. COOKIE_SAME_SITE=none 으로 전환.
+    const sameSite = process.env.COOKIE_SAME_SITE === 'none' ? 'none' : 'strict';
     res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+      sameSite,
       path: '/',
       expires: expiresAt,
     });

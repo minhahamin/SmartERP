@@ -20,18 +20,20 @@ async function bootstrap() {
   // helmet의 X-Frame-Options: SAMEORIGIN / CSP frame-ancestors 'self'는 문서 관리 화면이
   // PDF를 <iframe>으로 미리보기하는 것도 막는다(다른 포트=다른 오리진) — /uploads만 프론트 오리진의
   // 프레이밍을 허용한다.
+  // CORS_ORIGIN은 콤마 구분 다중 오리진 지원 (예: "https://fe.up.railway.app,http://localhost:5173")
+  const corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
   app.use('/uploads', (_req: Request, res: Response, next: NextFunction) => {
     res.removeHeader('X-Frame-Options');
-    res.setHeader(
-      'Content-Security-Policy',
-      `frame-ancestors 'self' ${process.env.CORS_ORIGIN ?? 'http://localhost:5173'}`,
-    );
+    res.setHeader('Content-Security-Policy', `frame-ancestors 'self' ${corsOrigins.join(' ')}`);
     next();
   });
   // 로컬 디스크에 저장된 문서 원본 서빙(docs/13은 S3를 전제하지만 실제 AWS 연동은 범위 밖)
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+    origin: corsOrigins,
     credentials: true,
   });
 
