@@ -4,6 +4,7 @@ import { SidebarNavItem } from '@/components/layout/sidebar-nav-item';
 import { Separator } from '@/components/ui/separator';
 import { NAV_SECTIONS } from '@/config/nav';
 import { useAuthStore } from '@/stores/auth-store';
+import { canAccessNavItem } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
 interface SidebarContentProps {
@@ -14,10 +15,11 @@ interface SidebarContentProps {
 
 function SidebarContent({ collapsed = false, onToggleCollapsed, onNavigate }: SidebarContentProps) {
   const role = useAuthStore((state) => state.user?.role);
+  const permissions = useAuthStore((state) => state.user?.permissions);
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.roles || (role && item.roles.includes(role))),
+    items: section.items.filter((item) => canAccessNavItem(item, permissions, role)),
   })).filter((section) => section.items.length > 0);
 
   return (

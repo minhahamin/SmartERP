@@ -1,4 +1,5 @@
 import { apiClient, type ApiSuccess } from '@/lib/api/client';
+import { triggerBlobDownload } from '@/lib/api/download';
 
 export type ProductionStatus = 'PLANNED' | 'IN_PROGRESS' | 'DELAYED' | 'COMPLETED' | 'CANCELLED';
 
@@ -79,4 +80,11 @@ export async function createProductionOrder(input: CreateProductionOrderInput) {
 export async function updateProductionStatus(id: string, status: ProductionStatus) {
   const { data } = await apiClient.patch<ApiSuccess<{ id: string }>>(`/production-orders/${id}/status`, { status });
   return data.data;
+}
+
+/** 현재 화면에 보이는 것과 동일한 스코프(EMPLOYEE는 본인 담당 오더만)로 Excel을 내려받는다 */
+export async function exportProductionOrders(): Promise<void> {
+  const { data } = await apiClient.get('/production-orders/export', { responseType: 'blob' });
+  const today = new Date().toISOString().slice(0, 10);
+  triggerBlobDownload(data as Blob, `생산현황_${today}.xlsx`);
 }

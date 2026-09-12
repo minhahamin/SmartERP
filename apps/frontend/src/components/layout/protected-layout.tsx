@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/app-layout';
 import { useAuthStore } from '@/stores/auth-store';
 import { ROUTES } from '@/config/routes';
+import { canAccessNavItem } from '@/lib/permissions';
 import type { RoleName } from '@/types/auth';
 
 /**
@@ -24,18 +25,34 @@ function ProtectedLayout() {
   return <AppLayout />;
 }
 
-/** 역할 기반 1차 가드 — 사이드바 숨김과 별개로 URL 직접 접근을 차단한다 */
-function RequireRole({ roles, children }: { roles: RoleName[]; children?: React.ReactNode }) {
+/**
+ * 권한 기반 1차 가드 — 사이드바 숨김과 별개로 URL 직접 접근을 차단한다.
+ * nav.ts의 resource/selfServiceRoles와 완전히 같은 판단 로직(canAccessNavItem)을 써서,
+ * "메뉴에는 안 보이는데 URL로는 들어가진다" 같은 불일치가 생기지 않게 한다.
+ */
+function RequirePermission({
+  resource,
+  action,
+  selfServiceRoles,
+  children,
+}: {
+  resource: string;
+  action?: string;
+  selfServiceRoles?: RoleName[];
+  children?: React.ReactNode;
+}) {
   const role = useAuthStore((state) => state.user?.role);
-  if (role && !roles.includes(role)) {
+  const permissions = useAuthStore((state) => state.user?.permissions);
+
+  if (!canAccessNavItem({ resource, action, selfServiceRoles }, permissions, role)) {
     return (
       <div style={{ padding: 32, maxWidth: 560, margin: '40px auto', textAlign: 'center' }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>접근 권한이 없습니다 (403)</h1>
-        <p style={{ color: '#666' }}>이 화면은 {roles.join(', ')} 역할만 접근할 수 있습니다.</p>
+        <p style={{ color: '#666' }}>이 화면에 대한 권한이 없습니다. 관리자에게 문의해주세요.</p>
       </div>
     );
   }
   return <>{children ?? <Outlet />}</>;
 }
 
-export { ProtectedLayout, RequireRole };
+export { ProtectedLayout, RequirePermission };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Download, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -7,6 +7,8 @@ import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { ProductionOrderCard } from '@/pages/production/components/production-order-card';
 import { ProductionFormDialog } from '@/pages/production/components/production-form-dialog';
 import { useProductionOrders, useUpdateProductionStatus } from '@/pages/production/hooks/use-production';
+import { exportProductionOrders } from '@/pages/production/api/production-api';
+import { toast } from '@/stores/toast-store';
 import type { ProductionOrder, ProductionStatus } from '@/pages/production/api/production-api';
 
 const COLUMNS: { status: ProductionStatus; label: string }[] = [
@@ -21,6 +23,7 @@ function ProductionPage() {
   const updateStatus = useUpdateProductionStatus();
   const [formOpen, setFormOpen] = useState(false);
   const [completingOrder, setCompletingOrder] = useState<ProductionOrder | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleStatusChange = (order: ProductionOrder, status: ProductionStatus) => {
     if (status === 'COMPLETED') {
@@ -30,15 +33,31 @@ function ProductionPage() {
     updateStatus.mutate({ id: order.id, status });
   };
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await exportProductionOrders();
+    } catch {
+      toast({ title: '생산현황 내보내기에 실패했습니다.', variant: 'destructive' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="생산 관리"
         description="생산 오더 진행 상태를 추적합니다."
         actions={
-          <Button onClick={() => setFormOpen(true)}>
-            <Plus /> 생산 오더 등록
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" loading={isExporting} onClick={handleExport}>
+              <Download /> Excel 내보내기
+            </Button>
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus /> 생산 오더 등록
+            </Button>
+          </div>
         }
       />
 

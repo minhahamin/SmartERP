@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AuthUser, RoleName } from '@/types/auth';
 import * as authApi from '@/lib/api/auth-api';
+import type { RolePermissionPreview } from '@/lib/api/auth-api';
 
 interface AuthState {
   user: AuthUser | null;
@@ -21,10 +22,11 @@ interface AuthState {
   clearSession: () => void;
   /**
    * 역할별로 메뉴/화면이 바뀌는 것을 재로그인 없이 시연하기 위한 데모 전용 헬퍼.
-   * 화면 표시용 role만 바꿀 뿐 실제 권한은 로그인 시 발급된 JWT에 종속되므로,
-   * 백엔드가 거부하는 동작은 역할 전환 후에도 여전히 거부된다.
+   * 화면 표시용 role/permissions만 바꿀 뿐 실제 권한은 로그인 시 발급된 JWT에 종속되므로,
+   * 백엔드가 거부하는 동작은 역할 전환 후에도 여전히 거부된다. 사이드바/라우트 가드가
+   * user.permissions를 보고 판단하므로, 미리보기가 실제로 동작하려면 permissions도 함께 바꿔야 한다.
    */
-  switchRole: (role: RoleName) => void;
+  switchRole: (role: RoleName) => Promise<void>;
   /** 내 프로필에서 연락처/이메일을 수정했을 때 헤더 등 다른 화면에 즉시 반영하기 위한 패치 */
   patchUser: (partial: Partial<Pick<AuthUser, 'email'>>) => void;
 }
@@ -36,6 +38,8 @@ interface AuthState {
  * 모듈 스코프 Promise로 중복 호출을 같은 요청에 합류시켜 방지한다.
  */
 let bootstrapPromise: Promise<void> | null = null;
+/** 역할별 권한 미리보기는 세션 동안 바뀌지 않으므로(고정 역할 매트릭스) 최초 1회만 조회해 재사용한다 */
+let rolePermissionPreviewPromise: Promise<RolePermissionPreview[]> | null = null;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -86,10 +90,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearSession: () => set({ user: null, accessToken: null, isAuthenticated: false }),
 
-  switchRole: (role) => {
+  switchRole: async (role) => {
     const current = get().user;
     if (!current) return;
-    set({ user: { ...current, role } });
+    try {
+      rolePermissionPreviewPromise ??= authApi.fetchRolePermissionPreview();
+      const preview = await rolePermissionPreviewPromise;
+      const permissions = preview.find((r) => r.name === role)?.permissions ?? [];
+      set({ user: { ...get().user!, role, permissions } });
+    } catch {
+      // 미리보기 조회 실패 시에도 최소한 role 표시(아바타/헤더)는 바뀌도록 유지한다
+      set({ user: { ...get().user!, role } });
+    }
   },
 
   patchUser: (partial) => {

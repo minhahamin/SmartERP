@@ -31,6 +31,17 @@ export class RolesController {
     return this.rolesService.findOptions(user);
   }
 
+  /**
+   * "데모: 역할 전환"(헤더)이 재로그인 없이 메뉴 노출을 미리보기 위해 쓴다. 역할이 "무엇을 할 수
+   * 있는지"(resource:action 목록)만 노출하며, 회원/매출 등 민감한 부가 정보(findAll()의 memberCount 등)는
+   * 포함하지 않으므로 findAll()과 달리 PERMISSION:READ 없이 인증만 요구한다(findOptions와 동일한 방침).
+   */
+  @Get('preview-permissions')
+  @ApiOperation({ summary: '역할별 보유 권한 미리보기(데모 역할 전환용, 인증만 요구)' })
+  findPermissionsPreview(@CurrentUser() user: AuthUser) {
+    return this.rolesService.findPermissionsPreview(user);
+  }
+
   @Get()
   @RequirePermissions('PERMISSION', 'READ')
   @ApiOperation({ summary: '역할 목록(보유 권한 포함)' })

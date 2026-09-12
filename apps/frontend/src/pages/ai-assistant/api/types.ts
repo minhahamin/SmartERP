@@ -12,10 +12,24 @@ export interface LeaveRequestDraftPayload {
   reason?: string;
 }
 
+export interface AnnouncementDraftPayload {
+  title: string;
+  content: string;
+  category?: string;
+  isPinned?: boolean;
+}
+
+export interface ProductionStatusUpdateDraftPayload {
+  productionOrderId: string;
+  orderNo: string;
+  status: string;
+  producedQty?: number;
+}
+
 export interface AiActionDraft {
   id: string;
-  actionType: 'LEAVE_REQUEST' | string;
-  payload: LeaveRequestDraftPayload | Record<string, unknown>;
+  actionType: 'LEAVE_REQUEST' | 'ANNOUNCEMENT' | 'PRODUCTION_STATUS_UPDATE' | string;
+  payload: LeaveRequestDraftPayload | AnnouncementDraftPayload | ProductionStatusUpdateDraftPayload | Record<string, unknown>;
   status: AiActionStatus;
   resultingRecordId: string | null;
   createdAt: string;

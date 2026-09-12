@@ -20,6 +20,7 @@ export const ROUTES = {
   production: '/production',
   documents: '/documents',
   announcements: '/announcements',
+  faq: '/faq',
   statistics: '/statistics',
   profile: '/profile',
 } as const;

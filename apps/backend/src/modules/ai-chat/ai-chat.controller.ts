@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -62,10 +63,34 @@ export class AiChatController {
     return this.aiChatService.rejectAction(id, user);
   }
 
+  @Get('actions/:id/pdf')
+  @ApiOperation({ summary: 'AI가 제안한 공지/휴가 초안을 PDF로 내려받기(본인 제안만, 상태 무관)' })
+  async exportActionPdf(@Param('id') id: string, @CurrentUser() user: AuthUser, @Res() res: Response) {
+    const buffer = await this.aiChatService.exportActionDraftPdf(id, user);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="ai-action-${id}.pdf"`);
+    res.send(buffer);
+  }
+
   @Get('faq')
   @ApiOperation({ summary: '게시된 FAQ 목록' })
   listFaq(@Query('category') category: string | undefined, @CurrentUser() user: AuthUser) {
     return this.aiChatService.listFaq(category, user);
+  }
+
+  @Get('faq/pending')
+  @RequirePermissions('DOCUMENT', 'CREATE')
+  @ApiOperation({ summary: 'FAQ 검수 대기 목록(자동 생성 후보 + 미게시 수동 초안)' })
+  listFaqDrafts(@CurrentUser() user: AuthUser) {
+    return this.aiChatService.listFaqDrafts(user);
+  }
+
+  @Post('faq/generate')
+  @RequirePermissions('DOCUMENT', 'CREATE')
+  @Audit('FAQ_GENERATE', 'FAQ')
+  @ApiOperation({ summary: '최근 챗봇 질문 로그에서 반복 질문을 묶어 FAQ 후보를 자동 생성 (Human-in-the-loop 검수 대기)' })
+  generateFaq(@Body('threshold') threshold: number | undefined, @CurrentUser() user: AuthUser) {
+    return this.aiChatService.generateFaqCandidates(user, threshold);
   }
 
   @Post('faq')

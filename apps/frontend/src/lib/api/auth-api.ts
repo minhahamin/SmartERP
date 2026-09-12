@@ -9,6 +9,7 @@ interface UserPayload {
   departmentName: string | null;
   position: string | null;
   mustChangePassword: boolean;
+  permissions: string[];
 }
 
 interface LoginResponseData {
@@ -20,10 +21,6 @@ interface RefreshResponseData {
   accessToken: string;
 }
 
-interface MeResponseData extends UserPayload {
-  permissions: string[];
-}
-
 function toAuthUser(data: UserPayload): AuthUser {
   return {
     id: data.id,
@@ -33,6 +30,7 @@ function toAuthUser(data: UserPayload): AuthUser {
     departmentName: data.departmentName ?? '-',
     position: data.position ?? '-',
     mustChangePassword: data.mustChangePassword,
+    permissions: data.permissions,
   };
 }
 
@@ -62,8 +60,19 @@ export async function refresh() {
 }
 
 export async function me() {
-  const { data } = await apiClient.get<ApiSuccess<MeResponseData>>('/auth/me');
+  const { data } = await apiClient.get<ApiSuccess<UserPayload>>('/auth/me');
   return toAuthUser(data.data);
+}
+
+export interface RolePermissionPreview {
+  name: string;
+  permissions: string[];
+}
+
+/** "데모: 역할 전환" 헤더 메뉴가 역할별 메뉴 노출을 미리보기 위해 쓴다 — 실제 권한은 그대로 원래 JWT를 따른다 */
+export async function fetchRolePermissionPreview(): Promise<RolePermissionPreview[]> {
+  const { data } = await apiClient.get<ApiSuccess<RolePermissionPreview[]>>('/roles/preview-permissions');
+  return data.data;
 }
 
 export async function logout() {

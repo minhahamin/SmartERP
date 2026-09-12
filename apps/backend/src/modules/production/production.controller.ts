@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -21,6 +22,16 @@ export class ProductionController {
   @ApiOperation({ summary: '생산 오더 목록(지연 필터 포함)' })
   findAll(@Query() query: ProductionOrderQueryDto, @CurrentUser() user: AuthUser) {
     return this.productionService.findAll(query, user);
+  }
+
+  @Get('export')
+  @RequirePermissions('PRODUCTION', 'READ')
+  @ApiOperation({ summary: '목록과 동일한 필터로 생산현황을 Excel(.xlsx)로 내려받기' })
+  async exportExcel(@Query() query: ProductionOrderQueryDto, @CurrentUser() user: AuthUser, @Res() res: Response) {
+    const buffer = await this.productionService.exportToExcel(query, user);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="production-orders-${Date.now()}.xlsx"`);
+    res.send(buffer);
   }
 
   @Get(':id')

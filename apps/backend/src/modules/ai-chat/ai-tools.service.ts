@@ -1,15 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import type { FunctionDeclaration } from '@google/genai';
-import type { LeaveType } from '@prisma/client';
+import type { LeaveType, PermissionAction, ProductionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PolicyService } from '../../common/services/policy.service';
 import { LeaveService } from '../leave/leave.service';
 import { LEAVE_TYPE_LABEL } from '../leave/leave-constants';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
+const VALID_PRODUCTION_STATUSES: ProductionStatus[] = ['PLANNED', 'IN_PROGRESS', 'DELAYED', 'COMPLETED', 'CANCELLED'];
+
 interface ToolDefinition {
   declaration: FunctionDeclaration;
-  /** null이면 별도 리소스 권한 없이 전 역할에 노출한다(근태/급여/연차처럼 본인 조회는 항상 허용되는 self-service 성격의 도구) */
-  permission: { resource: string } | null;
+  /**
+   * null이면 별도 리소스 권한 없이 전 역할에 노출한다(근태/급여/연차처럼 본인 조회는 항상 허용되는 self-service 성격의 도구).
+   * action 생략 시 READ로 취급한다(조회 도구 대부분). 데이터를 바꾸는 draft 도구는 실제로 확정될 때 필요한
+   * 권한(CREATE/UPDATE)을 명시해, "권한 없는 사용자에게 애초에 제안조차 하지 않는다"는 1차 방어를 맞춘다.
+   */
+  permission: { resource: string; action?: PermissionAction } | null;
   /** 질문에 이 중 하나라도 포함되면 노출 후보에 넣는다(1차 라우팅, docs/09 9.2 3단계와 동일한 목적) */
   keywords: string[];
 }
@@ -32,6 +39,7 @@ export class AiToolsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly leaveService: LeaveService,
+    private readonly policy: PolicyService,
   ) {}
 
   private readonly tools: ToolDefinition[] = [
@@ -228,6 +236,54 @@ export class AiToolsService {
         },
       },
     },
+    {
+      // 공지 작성은 본인 데이터가 아니라 회사 전체에 영향을 주므로, ANNOUNCEMENT:CREATE 권한이 있는
+      // 역할(ADMIN/HR_MANAGER 등)에게만 노출한다(draftLeaveRequest와 달리 self-service가 아님).
+      permission: { resource: 'ANNOUNCEMENT', action: 'CREATE' },
+      keywords: ['공지', '공지사항', '전체 공지', '알려줘', '작성해줘'],
+      declaration: {
+        name: 'draftAnnouncement',
+        description:
+          '사용자가 요청한 공지사항의 "초안"만 만든다. 이 함수를 호출해도 공지가 실제로 게시되지 않는다 — ' +
+          '화면에 뜨는 확인 카드에서 사용자가 직접 확인 버튼을 눌러야 최종 게시된다. 제목/내용은 사용자가 실제로 ' +
+          '말한 내용을 자연스러운 공지 문구로 다듬어 작성하되, 사용자가 언급하지 않은 사실(날짜/수치 등)을 지어내지 않는다.',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            content: { type: 'string' },
+            category: { type: 'string', description: '예: 인사, 영업, 생산, 행사, 공지' },
+            isPinned: { type: 'boolean', description: '사용자가 상단 고정을 명시한 경우만 true' },
+          },
+          required: ['title', 'content'],
+        },
+      },
+    },
+    {
+      // 상태 변경은 실제 재고 입고(완료 시)까지 트리거하는 되돌리기 어려운 작업이라
+      // PRODUCTION:UPDATE 권한이 있는 역할에게만 노출한다.
+      permission: { resource: 'PRODUCTION', action: 'UPDATE' },
+      keywords: ['생산', '오더', '상태', '완료', '지연', '변경', '진행'],
+      declaration: {
+        name: 'draftProductionStatusUpdate',
+        description:
+          '사용자가 요청한 생산 오더 상태 변경의 "초안"만 만든다. 이 함수를 호출해도 상태가 실제로 바뀌지 않는다 — ' +
+          '화면에 뜨는 확인 카드에서 사용자가 직접 확인 버튼을 눌러야 최종 반영된다. orderNo는 사용자가 실제로 ' +
+          '언급한 오더 번호 그대로 사용하고 지어내지 않는다(모르면 getProductionOrdersByStatus로 먼저 조회해서 확인한다).',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: {
+            orderNo: { type: 'string', description: '예: PO-2026-0016' },
+            status: { type: 'string', enum: VALID_PRODUCTION_STATUSES },
+            producedQty: {
+              type: 'integer',
+              description: 'status를 COMPLETED로 바꿀 때, 사용자가 실제 생산 수량을 언급한 경우만 입력',
+            },
+          },
+          required: ['orderNo', 'status'],
+        },
+      },
+    },
   ];
 
   /**
@@ -238,8 +294,17 @@ export class AiToolsService {
    * 요구를 만족시킨다.
    */
   async getDeclarations(requester: AuthUser, userMessage: string): Promise<FunctionDeclaration[]> {
-    const granted = await this.grantedReadResources(requester.roleId);
-    const allowed = this.tools.filter((t) => t.permission === null || granted.has(t.permission.resource));
+    const grantedRead = await this.grantedReadResources(requester.roleId);
+    const allowed: ToolDefinition[] = [];
+    for (const t of this.tools) {
+      if (t.permission === null) {
+        allowed.push(t);
+        continue;
+      }
+      const action = t.permission.action ?? 'READ';
+      const ok = action === 'READ' ? grantedRead.has(t.permission.resource) : await this.policy.hasPermission(requester, t.permission.resource, action);
+      if (ok) allowed.push(t);
+    }
 
     const matched = allowed.filter((t) => t.keywords.some((k) => userMessage.includes(k)));
     return (matched.length > 0 ? matched : allowed).map((t) => t.declaration);
@@ -255,8 +320,12 @@ export class AiToolsService {
     if (!tool) return { error: `알 수 없는 도구입니다: ${name}` };
 
     if (tool.permission) {
-      const granted = await this.grantedReadResources(requester.roleId);
-      if (!granted.has(tool.permission.resource)) {
+      const action = tool.permission.action ?? 'READ';
+      const granted =
+        action === 'READ'
+          ? (await this.grantedReadResources(requester.roleId)).has(tool.permission.resource)
+          : await this.policy.hasPermission(requester, tool.permission.resource, action);
+      if (!granted) {
         return { error: `'${tool.permission.resource}' 데이터에 접근할 권한이 없습니다.` };
       }
     }
@@ -297,6 +366,10 @@ export class AiToolsService {
         return this.searchInternalDocuments(requester, asString(args.query));
       case 'draftLeaveRequest':
         return this.draftLeaveRequest(requester, sessionId, args);
+      case 'draftAnnouncement':
+        return this.draftAnnouncement(requester, sessionId, args);
+      case 'draftProductionStatusUpdate':
+        return this.draftProductionStatusUpdate(requester, sessionId, args);
       default:
         return { error: `구현되지 않은 도구입니다: ${name}` };
     }
@@ -630,6 +703,66 @@ export class AiToolsService {
       summary: `${LEAVE_TYPE_LABEL[type]} · ${period}`,
       message:
         '휴가 신청 초안을 만들었습니다. 아직 접수되지 않았고, 화면에 표시되는 확인 카드에서 사용자가 확인을 눌러야 최종 제출됩니다.',
+    };
+  }
+
+  /** confirm 단계에서 AnnouncementsService.create()를 그대로 호출하므로 수동 작성과 동일한 경로를 탄다(ai-chat.service.ts) */
+  private async draftAnnouncement(requester: AuthUser, sessionId: string, args: Record<string, unknown>) {
+    const title = asString(args.title);
+    const content = asString(args.content);
+    if (!title || !content) return { error: '공지 제목과 내용이 모두 필요합니다.' };
+
+    const payload = {
+      title,
+      content,
+      category: args.category ? asString(args.category) : undefined,
+      isPinned: args.isPinned === true,
+    };
+    const draft = await this.prisma.aiActionDraft.create({
+      data: { userId: requester.sub, sessionId, actionType: 'ANNOUNCEMENT', payload },
+    });
+    return {
+      drafted: true,
+      draftId: draft.id,
+      summary: title,
+      message:
+        '공지사항 초안을 만들었습니다. 아직 게시되지 않았고, 화면에 표시되는 확인 카드에서 사용자가 확인을 눌러야 최종 게시됩니다.',
+    };
+  }
+
+  /** confirm 단계에서 ProductionService.updateStatus()를 그대로 호출하므로 수동 상태변경과 동일한 검증/입고 로직을 탄다 */
+  private async draftProductionStatusUpdate(requester: AuthUser, sessionId: string, args: Record<string, unknown>) {
+    const orderNo = asString(args.orderNo);
+    const status = asString(args.status) as ProductionStatus | '';
+    if (!orderNo) return { error: '생산 오더 번호가 필요합니다.' };
+    if (!status || !VALID_PRODUCTION_STATUSES.includes(status)) {
+      return { error: `상태값이 올바르지 않습니다. 다음 중 하나여야 합니다: ${VALID_PRODUCTION_STATUSES.join(', ')}` };
+    }
+
+    // production.service.ts의 updateStatus()는 confirm 시점에 assertOwnerOrRole(managerId, ['ADMIN'])로
+    // "담당자 본인 아니면 ADMIN만" 허용한다. 여기서도 같은 조건으로 미리 스코핑해야, EMPLOYEE가 자기 담당이
+    // 아닌 오더의 초안을 만들어놓고 confirm에서야 거부당하는 혼란스러운 UX를 막을 수 있다.
+    const order = await this.prisma.productionOrder.findFirst({
+      where: {
+        companyId: requester.companyId,
+        orderNo,
+        ...(requester.roleName === 'ADMIN' ? {} : { managerId: requester.sub }),
+      },
+    });
+    if (!order) return { error: `'${orderNo}' 생산 오더를 찾지 못했습니다(담당자 본인 오더만 변경 가능).` };
+
+    const producedQtyRaw = args.producedQty;
+    const producedQty = typeof producedQtyRaw === 'number' ? producedQtyRaw : undefined;
+    const payload = { productionOrderId: order.id, orderNo: order.orderNo, status, producedQty };
+    const draft = await this.prisma.aiActionDraft.create({
+      data: { userId: requester.sub, sessionId, actionType: 'PRODUCTION_STATUS_UPDATE', payload },
+    });
+    return {
+      drafted: true,
+      draftId: draft.id,
+      summary: `${orderNo} → ${status}`,
+      message:
+        '생산 오더 상태 변경 초안을 만들었습니다. 아직 반영되지 않았고, 화면에 표시되는 확인 카드에서 사용자가 확인을 눌러야 최종 반영됩니다.',
     };
   }
 }

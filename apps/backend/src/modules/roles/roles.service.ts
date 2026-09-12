@@ -19,6 +19,20 @@ export class RolesService {
     });
   }
 
+  async findPermissionsPreview(requester: AuthUser) {
+    const roles = await this.prisma.role.findMany({
+      where: { companyId: requester.companyId },
+      select: {
+        name: true,
+        rolePermissions: { select: { permission: { select: { resource: true, action: true } } } },
+      },
+    });
+    return roles.map((r) => ({
+      name: r.name,
+      permissions: r.rolePermissions.map((rp) => `${rp.permission.resource}:${rp.permission.action}`),
+    }));
+  }
+
   findAll(requester: AuthUser) {
     return this.prisma.role.findMany({
       where: { companyId: requester.companyId },

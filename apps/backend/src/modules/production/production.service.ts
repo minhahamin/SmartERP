@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PolicyService } from '../../common/services/policy.service';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
@@ -10,6 +11,14 @@ import { retryOnDuplicate } from '../../common/utils/retry-on-duplicate';
 
 const FULL_ACCESS_ROLES = ['ADMIN'];
 
+const STATUS_LABEL: Record<string, string> = {
+  PLANNED: '계획',
+  IN_PROGRESS: '진행중',
+  DELAYED: '지연',
+  COMPLETED: '완료',
+  CANCELLED: '취소',
+};
+
 @Injectable()
 export class ProductionService {
   constructor(
@@ -17,8 +26,7 @@ export class ProductionService {
     private readonly policy: PolicyService,
   ) {}
 
-  /** docs/02 2.2 — EMPLOYEE는 "CRUD(own 작업)"이므로 본인이 담당자인 오더만 조회 */
-  async findAll(query: ProductionOrderQueryDto, requester: AuthUser) {
+  private buildWhere(query: ProductionOrderQueryDto, requester: AuthUser): Record<string, unknown> {
     const where: Record<string, unknown> = { companyId: requester.companyId };
     if (requester.roleName === 'EMPLOYEE') where.managerId = requester.sub;
     if (query.status) where.status = query.status;
@@ -27,7 +35,12 @@ export class ProductionService {
       where.status = { notIn: ['COMPLETED', 'CANCELLED'] };
       where.dueDate = { lt: new Date() };
     }
+    return where;
+  }
 
+  /** docs/02 2.2 — EMPLOYEE는 "CRUD(own 작업)"이므로 본인이 담당자인 오더만 조회 */
+  async findAll(query: ProductionOrderQueryDto, requester: AuthUser) {
+    const where = this.buildWhere(query, requester);
     const [items, total] = await Promise.all([
       this.prisma.productionOrder.findMany({
         where,
@@ -39,6 +52,55 @@ export class ProductionService {
       this.prisma.productionOrder.count({ where }),
     ]);
     return paginate(items, total, query.page, query.limit);
+  }
+
+  /** 목록 화면과 동일한 필터·스코핑(EMPLOYEE는 본인 담당 오더만)을 그대로 적용해 Excel로 내려받는다 */
+  async exportToExcel(query: ProductionOrderQueryDto, requester: AuthUser): Promise<Buffer> {
+    const where = this.buildWhere(query, requester);
+    // ProductionOrder.managerId는 스키마상 User로의 @relation이 없는 단순 FK라 별도로 조인한다
+    const orders = await this.prisma.productionOrder.findMany({
+      where,
+      include: { product: true },
+      orderBy: { dueDate: 'asc' },
+    });
+    const managerIds = [...new Set(orders.map((o) => o.managerId).filter((id): id is string => Boolean(id)))];
+    const managers = await this.prisma.user.findMany({
+      where: { id: { in: managerIds } },
+      select: { id: true, name: true },
+    });
+    const managerNameById = new Map(managers.map((m) => [m.id, m.name]));
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('생산현황');
+    sheet.columns = [
+      { header: '오더번호', key: 'orderNo', width: 18 },
+      { header: '제품명', key: 'productName', width: 28 },
+      { header: '라인', key: 'lineName', width: 12 },
+      { header: '계획수량', key: 'plannedQty', width: 12 },
+      { header: '생산수량', key: 'producedQty', width: 12 },
+      { header: '상태', key: 'status', width: 10 },
+      { header: '시작일', key: 'startDate', width: 12 },
+      { header: '마감일', key: 'dueDate', width: 12 },
+      { header: '담당자', key: 'managerName', width: 12 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+
+    for (const o of orders) {
+      sheet.addRow({
+        orderNo: o.orderNo,
+        productName: o.product.name,
+        lineName: o.lineName,
+        plannedQty: o.plannedQty,
+        producedQty: o.producedQty,
+        status: STATUS_LABEL[o.status] ?? o.status,
+        startDate: o.startDate.toISOString().slice(0, 10),
+        dueDate: o.dueDate.toISOString().slice(0, 10),
+        managerName: (o.managerId && managerNameById.get(o.managerId)) || '-',
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 
   async findOne(id: string, requester: AuthUser) {

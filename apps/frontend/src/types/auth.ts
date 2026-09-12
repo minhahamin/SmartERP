@@ -10,6 +10,8 @@ export interface AuthUser {
   avatarUrl?: string;
   /** 초대 가입자가 임시 비밀번호로 로그인한 경우 true — 비밀번호 변경 화면으로 강제 이동시킨다 */
   mustChangePassword: boolean;
+  /** "RESOURCE:ACTION" 형태(예: "PAYROLL:READ") — 사이드바/라우트 가드가 이 목록으로 화면 노출을 판단한다 */
+  permissions: string[];
 }
 
 export const ROLE_LABEL: Record<RoleName, string> = {
