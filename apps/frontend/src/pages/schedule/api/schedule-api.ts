@@ -8,6 +8,8 @@ export interface ScheduleEvent {
   title: string;
   type: ScheduleType;
   date: string;
+  /** date와 같으면 하루짜리 일정, 다르면 여러 날에 걸친 일정(예: 연차 승인 시 자동 등록되는 휴가) */
+  endDate: string;
   startTime: string;
   endTime: string;
   location: string;
@@ -41,6 +43,7 @@ interface RawSchedule {
   type: ScheduleType;
   startAt: string;
   endAt: string;
+  allDay: boolean;
   location: string | null;
   ownerId: string;
   visibility: ScheduleVisibility;
@@ -50,15 +53,23 @@ function pad(value: number): string {
   return String(value).padStart(2, '0');
 }
 
-/** 백엔드는 startAt/endAt(ISO datetime) 단일 필드를 쓰지만, 기존 UI는 date/startTime/endTime로 분리되어 있어 여기서 변환한다 */
+function toDateString(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** 백엔드는 startAt/endAt(ISO datetime) 범위를 쓰지만, 기존 UI는 date/startTime/endTime로 분리되어 있어 여기서 변환한다.
+ * allDay 일정(휴가 승인 시 자동 등록)은 endAt이 종료 다음날 00:00(배타적 경계)로 저장되므로 하루 빼서 캘린더에 표시할
+ * 마지막 날짜(endDate, 포함)를 계산한다 — 안 그러면 3일짜리 연차가 달력에 하루만 표시된다. */
 function toScheduleEvent(raw: RawSchedule): ScheduleEvent {
   const start = new Date(raw.startAt);
   const end = new Date(raw.endAt);
+  const endDisplay = raw.allDay ? new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1) : end;
   return {
     id: raw.id,
     title: raw.title,
     type: raw.type,
-    date: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+    date: toDateString(start),
+    endDate: toDateString(endDisplay),
     startTime: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
     endTime: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
     location: raw.location ?? '-',
