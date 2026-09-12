@@ -1,4 +1,10 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   GoogleGenAI,
@@ -10,8 +16,12 @@ import {
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
+import { LeaveService } from '../leave/leave.service';
 import { AiToolsService } from './ai-tools.service';
 import { SendMessageDto } from './dto/send-message.dto';
+
+/** AI가 만든 초안은 "지금 답변 기준" 최신 정보로만 실행되어야 하므로, 오래된 제안은 재확인을 요구한다. */
+const ACTION_DRAFT_TTL_MS = 10 * 60 * 1000;
 
 const MODEL = 'gemini-2.5-flash';
 const MAX_TOOL_TURNS = 4;
@@ -41,6 +51,7 @@ export class AiChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiTools: AiToolsService,
+    private readonly leaveService: LeaveService,
     config: ConfigService,
   ) {
     const apiKey = config.get<string>('GEMINI_API_KEY');
@@ -57,7 +68,11 @@ export class AiChatService {
 
   async listMessages(sessionId: string, requester: AuthUser) {
     await this.assertOwnSession(sessionId, requester);
-    return this.prisma.chatMessage.findMany({ where: { sessionId }, orderBy: { createdAt: 'asc' } });
+    return this.prisma.chatMessage.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: 'asc' },
+      include: { actionDraft: true },
+    });
   }
 
   /** ChatMessage는 ChatSession에 onDelete: Cascade로 걸려있어 메시지도 함께 삭제된다 */
@@ -86,10 +101,7 @@ export class AiChatService {
   }
 
   /** Human-in-the-loop: AI/사용자가 올린 초안은 isPublished=false로 대기, 검수 후 게시 */
-  async createFaqDraft(
-    dto: { question: string; answer: string; category?: string },
-    requester: AuthUser,
-  ) {
+  async createFaqDraft(dto: { question: string; answer: string; category?: string }, requester: AuthUser) {
     return this.prisma.faqItem.create({
       data: {
         companyId: requester.companyId,
@@ -139,6 +151,10 @@ export class AiChatService {
     const declarations = await this.aiTools.getDeclarations(requester, userMessage);
     const usedTools: string[] = [];
     const toolResults: Array<{ tool: string; result: unknown }> = [];
+    let totalTokens = 0;
+    // draftLeaveRequest처럼 "제안"을 만드는 도구가 이 턴에서 실행되면 마지막 draftId를 기억해뒀다가
+    // 최종 ASSISTANT 메시지에 매달아, 프론트가 확인/취소 카드를 그 메시지 아래에 렌더링하게 한다.
+    let lastDraftId: string | undefined;
 
     let turn = 0;
     try {
@@ -151,6 +167,7 @@ export class AiChatService {
             tools: declarations.length > 0 ? [{ functionDeclarations: declarations }] : undefined,
           },
         });
+        totalTokens += response.usageMetadata?.totalTokenCount ?? 0;
 
         const calls = response.functionCalls ?? [];
         if (calls.length === 0) {
@@ -163,7 +180,10 @@ export class AiChatService {
               functionName: usedTools.length > 0 ? usedTools.join(', ') : null,
               functionResult:
                 usedTools.length > 0 ? (toolResults as unknown as Prisma.InputJsonValue) : undefined,
+              tokenUsage: totalTokens,
+              actionDraftId: lastDraftId,
             },
+            include: { actionDraft: true },
           });
         }
 
@@ -176,9 +196,12 @@ export class AiChatService {
         const responseParts = [];
         for (const call of calls) {
           const name = call.name ?? '';
-          const result = await this.aiTools.execute(name, call.args ?? {}, requester);
+          const result = await this.aiTools.execute(name, call.args ?? {}, requester, sessionId);
           usedTools.push(name);
           toolResults.push({ tool: name, result });
+          if (result && typeof result === 'object' && 'draftId' in result) {
+            lastDraftId = (result as { draftId: string }).draftId;
+          }
           responseParts.push(createPartFromFunctionResponse(call.id ?? name, name, { result }));
         }
         contents.push(createUserContent(responseParts));
@@ -191,6 +214,7 @@ export class AiChatService {
           sessionId,
           role: 'ASSISTANT',
           content: 'AI 응답을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+          tokenUsage: totalTokens,
         },
       });
     }
@@ -201,8 +225,55 @@ export class AiChatService {
         role: 'ASSISTANT',
         content:
           '요청을 처리하는 중 도구 호출 한도를 초과했습니다. 질문을 더 구체적으로 나눠서 다시 시도해주세요.',
+        tokenUsage: totalTokens,
       },
     });
+  }
+
+  /**
+   * "확인" 버튼 → 초안을 실제 도메인 서비스 호출로 확정한다. LeaveService.create()를 그대로
+   * 호출하므로 수동으로 "휴가 신청" 화면에서 신청하는 것과 완전히 동일한 검증/잔액체크/트랜잭션을 탄다.
+   */
+  async confirmAction(draftId: string, requester: AuthUser) {
+    const draft = await this.getOwnedPendingDraft(draftId, requester);
+
+    switch (draft.actionType) {
+      case 'LEAVE_REQUEST': {
+        const payload = draft.payload as {
+          type: 'ANNUAL' | 'HALF_DAY_AM' | 'HALF_DAY_PM' | 'HOURLY' | 'SICK' | 'SPECIAL' | 'UNPAID';
+          startDate: string;
+          endDate: string;
+          timeSlot?: string;
+          reason?: string;
+        };
+        const created = await this.leaveService.create(payload, requester);
+        return this.prisma.aiActionDraft.update({
+          where: { id: draftId },
+          data: { status: 'CONFIRMED', confirmedAt: new Date(), resultingRecordId: created.id },
+        });
+      }
+      default:
+        throw new BadRequestException(`지원하지 않는 액션 유형입니다: ${draft.actionType}`);
+    }
+  }
+
+  async rejectAction(draftId: string, requester: AuthUser) {
+    await this.getOwnedPendingDraft(draftId, requester);
+    return this.prisma.aiActionDraft.update({ where: { id: draftId }, data: { status: 'REJECTED' } });
+  }
+
+  private async getOwnedPendingDraft(draftId: string, requester: AuthUser) {
+    const draft = await this.prisma.aiActionDraft.findUnique({ where: { id: draftId } });
+    if (!draft) throw new NotFoundException('액션 제안을 찾을 수 없습니다.');
+    if (draft.userId !== requester.sub)
+      throw new ForbiddenException('본인이 요청한 제안만 처리할 수 있습니다.');
+    if (draft.status !== 'PENDING') throw new BadRequestException('이미 처리된 제안입니다.');
+
+    if (Date.now() - draft.createdAt.getTime() > ACTION_DRAFT_TTL_MS) {
+      await this.prisma.aiActionDraft.update({ where: { id: draftId }, data: { status: 'EXPIRED' } });
+      throw new BadRequestException('제안이 만료되었습니다. 채팅에서 다시 요청해주세요.');
+    }
+    return draft;
   }
 
   private async assertOwnSession(sessionId: string, requester: AuthUser) {

@@ -67,7 +67,7 @@ function AiAssistantPage() {
                 ) : (
                   <div className="flex flex-col gap-4">
                     {messages.map((message) => (
-                      <ChatMessageBubble key={message.id} message={message} />
+                      <ChatMessageBubble key={message.id} message={message} sessionId={selectedSessionId} />
                     ))}
                     {sendMessage.isPending && (
                       <div className="flex justify-start">

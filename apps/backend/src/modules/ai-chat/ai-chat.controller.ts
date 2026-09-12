@@ -49,6 +49,19 @@ export class AiChatController {
     return this.aiChatService.sendMessage(id, dto, user);
   }
 
+  @Post('actions/:id/confirm')
+  @Audit('AI_ACTION_CONFIRM', 'AI_ACTION')
+  @ApiOperation({ summary: 'AI가 제안한 액션 초안을 확정 실행(본인 제안만)' })
+  confirmAction(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.aiChatService.confirmAction(id, user);
+  }
+
+  @Post('actions/:id/reject')
+  @ApiOperation({ summary: 'AI가 제안한 액션 초안을 반려(본인 제안만)' })
+  rejectAction(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.aiChatService.rejectAction(id, user);
+  }
+
   @Get('faq')
   @ApiOperation({ summary: '게시된 FAQ 목록' })
   listFaq(@Query('category') category: string | undefined, @CurrentUser() user: AuthUser) {

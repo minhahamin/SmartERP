@@ -1,8 +1,29 @@
 import { Sparkles, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/pages/ai-assistant/api/types';
+import { ActionProposalCard } from '@/pages/ai-assistant/components/action-proposal-card';
 
-function ChatMessageBubble({ message }: { message: ChatMessage }) {
+/** "toolA, toolB, toolC" → 실제로 몇 단계를 거쳐 조사했는지 순서대로 보여준다(멀티스텝 도구 호출 투명화) */
+function ToolChain({ functionName, tokenUsage }: { functionName: string; tokenUsage: number | null }) {
+  const steps = functionName.split(', ').filter(Boolean);
+  const isAction = steps.some((s) => s.startsWith('draft'));
+
+  return (
+    <span className="flex flex-wrap items-center gap-1 px-1 text-[11px] text-muted-foreground">
+      <Wrench className="size-3 shrink-0" />
+      <span>{isAction ? '처리:' : '조회:'}</span>
+      {steps.map((step, i) => (
+        <span key={`${step}-${i}`} className="flex items-center gap-1">
+          <span className="rounded bg-gray-100 px-1 py-0.5 font-mono">{step}</span>
+          {i < steps.length - 1 && <span aria-hidden>→</span>}
+        </span>
+      ))}
+      {tokenUsage != null && <span className="ml-1 text-muted-foreground/70">· {tokenUsage.toLocaleString()} tokens</span>}
+    </span>
+  );
+}
+
+function ChatMessageBubble({ message, sessionId }: { message: ChatMessage; sessionId: string }) {
   const isUser = message.role === 'USER';
 
   return (
@@ -22,10 +43,9 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
           {message.content}
         </div>
         {!isUser && message.functionName && (
-          <span className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
-            <Wrench className="size-3" /> 조회: {message.functionName}
-          </span>
+          <ToolChain functionName={message.functionName} tokenUsage={message.tokenUsage} />
         )}
+        {!isUser && message.actionDraft && <ActionProposalCard draft={message.actionDraft} sessionId={sessionId} />}
       </div>
     </div>
   );

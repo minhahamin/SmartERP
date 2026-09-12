@@ -6,9 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 const SUGGESTED_QUESTIONS = [
   '재고가 부족한 품목은?',
   '이번 달 매출 요약해줘',
-  '신입사원 연차 규정 알려줘',
   '생산 지연 중인 작업은?',
   '내 근태 현황 알려줘',
+  '다음 주 월요일 연차 신청해줘',
 ];
 
 interface ChatComposerProps {

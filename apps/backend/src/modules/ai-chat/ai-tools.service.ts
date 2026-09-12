@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { FunctionDeclaration } from '@google/genai';
+import type { LeaveType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LeaveService } from '../leave/leave.service';
+import { LEAVE_TYPE_LABEL } from '../leave/leave-constants';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
 interface ToolDefinition {
@@ -16,6 +18,9 @@ interface ToolDefinition {
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
+
+const VALID_LEAVE_TYPES = Object.keys(LEAVE_TYPE_LABEL) as LeaveType[];
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * docs/09-ai-chatbot-design.md 9.3의 이중 방어 구조를 실제 RolePermission 테이블로 구현한다.
@@ -190,6 +195,39 @@ export class AiToolsService {
         },
       },
     },
+    {
+      // 연차 신청은 본인 self-service라 getLeaveBalance와 동일하게 별도 리소스 권한 없이 노출한다.
+      permission: null,
+      keywords: ['연차', '휴가', '반차', '병가', '경조사', '신청'],
+      declaration: {
+        name: 'draftLeaveRequest',
+        description:
+          '사용자가 요청한 휴가 신청의 "초안"만 만든다. 이 함수를 호출해도 휴가가 실제로 접수되지 않는다 — ' +
+          '화면에 뜨는 확인 카드에서 사용자가 직접 확인 버튼을 눌러야 최종 제출된다. 날짜와 유형은 사용자가 ' +
+          '실제로 언급한 내용만 사용하고, 언급하지 않은 값을 지어내지 않는다(예: 종료일을 안 말했으면 시작일과 ' +
+          '동일하게 하루짜리로 가정한다고 답변에 명시).',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['ANNUAL', 'HALF_DAY_AM', 'HALF_DAY_PM', 'HOURLY', 'SICK', 'SPECIAL', 'UNPAID'],
+              description:
+                'ANNUAL=연차, HALF_DAY_AM=오전반차, HALF_DAY_PM=오후반차, HOURLY=시간반차, SICK=병가, SPECIAL=경조사, UNPAID=무급휴가',
+            },
+            startDate: { type: 'string', description: 'YYYY-MM-DD' },
+            endDate: { type: 'string', description: 'YYYY-MM-DD (반차/시간반차는 startDate와 동일)' },
+            timeSlot: {
+              type: 'string',
+              enum: ['09:00-11:00', '11:00-13:00', '13:00-15:00', '15:00-17:00'],
+              description: 'type이 HOURLY일 때만 필요',
+            },
+            reason: { type: 'string' },
+          },
+          required: ['type', 'startDate', 'endDate'],
+        },
+      },
+    },
   ];
 
   /**
@@ -207,7 +245,12 @@ export class AiToolsService {
     return (matched.length > 0 ? matched : allowed).map((t) => t.declaration);
   }
 
-  async execute(name: string, args: Record<string, unknown>, requester: AuthUser): Promise<unknown> {
+  async execute(
+    name: string,
+    args: Record<string, unknown>,
+    requester: AuthUser,
+    sessionId: string,
+  ): Promise<unknown> {
     const tool = this.tools.find((t) => t.declaration.name === name);
     if (!tool) return { error: `알 수 없는 도구입니다: ${name}` };
 
@@ -252,6 +295,8 @@ export class AiToolsService {
         return this.getAnnouncements(requester);
       case 'searchInternalDocuments':
         return this.searchInternalDocuments(requester, asString(args.query));
+      case 'draftLeaveRequest':
+        return this.draftLeaveRequest(requester, sessionId, args);
       default:
         return { error: `구현되지 않은 도구입니다: ${name}` };
     }
@@ -540,6 +585,51 @@ export class AiToolsService {
     return {
       found: true,
       items: documents.map((d) => ({ title: d.title, summary: d.summary, category: d.category })),
+    };
+  }
+
+  /**
+   * "제안(draft) → 사람 확인 → 확정 실행" 패턴의 1단계. AiActionDraft에 PENDING으로만 저장하고,
+   * 실제 LeaveRequest 생성은 여기서 하지 않는다(사용자가 /ai/actions/:id/confirm을 눌러야
+   * ai-chat.service.ts의 confirmAction()이 LeaveService.create()를 그대로 호출한다 — 수동
+   * UI에서 신청하는 것과 완전히 동일한 검증/트랜잭션 경로를 탄다).
+   */
+  private async draftLeaveRequest(requester: AuthUser, sessionId: string, args: Record<string, unknown>) {
+    const type = asString(args.type) as LeaveType | '';
+    const startDate = asString(args.startDate);
+    const endDate = asString(args.endDate) || startDate;
+
+    if (!type || !VALID_LEAVE_TYPES.includes(type)) {
+      return {
+        error: `휴가 유형이 올바르지 않습니다. 다음 중 하나여야 합니다: ${VALID_LEAVE_TYPES.join(', ')}`,
+      };
+    }
+    if (!DATE_PATTERN.test(startDate) || !DATE_PATTERN.test(endDate)) {
+      return { error: '시작일/종료일은 YYYY-MM-DD 형식이어야 합니다.' };
+    }
+    if (type === 'HOURLY' && !asString(args.timeSlot)) {
+      return { error: '시간반차는 timeSlot(예: 09:00-11:00)이 필요합니다.' };
+    }
+
+    const payload = {
+      type,
+      startDate,
+      endDate,
+      timeSlot: type === 'HOURLY' ? asString(args.timeSlot) : undefined,
+      reason: args.reason ? asString(args.reason) : undefined,
+    };
+
+    const draft = await this.prisma.aiActionDraft.create({
+      data: { userId: requester.sub, sessionId, actionType: 'LEAVE_REQUEST', payload },
+    });
+
+    const period = startDate === endDate ? startDate : `${startDate} ~ ${endDate}`;
+    return {
+      drafted: true,
+      draftId: draft.id,
+      summary: `${LEAVE_TYPE_LABEL[type]} · ${period}`,
+      message:
+        '휴가 신청 초안을 만들었습니다. 아직 접수되지 않았고, 화면에 표시되는 확인 카드에서 사용자가 확인을 눌러야 최종 제출됩니다.',
     };
   }
 }

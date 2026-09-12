@@ -150,6 +150,7 @@ model User {
   announcementReads AnnouncementRead[]
   notifications     Notification[]
   chatSessions      ChatSession[]
+  aiActionDrafts    AiActionDraft[]
   auditLogs         AuditLog[]
 
   @@unique([companyId, email])
@@ -660,8 +661,9 @@ model ChatSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User          @relation(fields: [userId], references: [id])
-  messages ChatMessage[]
+  user         User            @relation(fields: [userId], references: [id])
+  messages     ChatMessage[]
+  actionDrafts AiActionDraft[]
 
   @@index([userId])
   @@map("chat_sessions")
@@ -676,9 +678,13 @@ model ChatMessage {
   functionArgs   Json?
   functionResult Json?
   tokenUsage     Int?
+  // 이 답변 처리 중 AI가 제안한 액션 초안(있는 경우) — 프론트는 이 값이 있으면 말풍선 아래에
+  // 확인/취소 카드를 렌더링한다. 초안 자체의 최신 상태(PENDING/CONFIRMED/...)는 관계를 따라간다.
+  actionDraftId  String?
   createdAt      DateTime @default(now())
 
-  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session     ChatSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  actionDraft AiActionDraft? @relation(fields: [actionDraftId], references: [id])
 
   @@index([sessionId, createdAt])
   @@map("chat_messages")
@@ -689,6 +695,42 @@ enum ChatRole {
   ASSISTANT
   SYSTEM
   FUNCTION
+}
+
+/**
+ * "제안(draft) → 사람 확인 → 확정 실행" 2단계 액션 실행 패턴(docs/09-ai-chatbot-design.md 확장).
+ * LLM은 이 테이블에 PENDING 행을 쓰는 것까지만 하고, 실제 도메인 데이터(LeaveRequest 등)는
+ * 사용자가 확인 버튼을 눌러 /ai/actions/:id/confirm을 호출해야만 생성된다 — 모델 환각/애매한
+ * 대명사 참조로 실제 업무 데이터가 잘못 생성되는 사고를 막기 위함.
+ */
+model AiActionDraft {
+  id                String         @id @default(uuid())
+  userId            String
+  sessionId         String
+  /** 예: 'LEAVE_REQUEST'. 새 액션 유형을 추가할 때마다 값이 늘어난다(현재는 1종) */
+  actionType        String
+  /** confirm 시 그대로 해당 도메인 서비스의 CreateDto로 캐스팅되는 원본 제안 내용 */
+  payload           Json
+  status            AiActionStatus @default(PENDING)
+  /** confirm 성공 후 실제로 생성된 레코드(예: LeaveRequest)의 id — 감사 추적용 */
+  resultingRecordId String?
+  createdAt         DateTime       @default(now())
+  confirmedAt       DateTime?
+
+  user     User          @relation(fields: [userId], references: [id])
+  session  ChatSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@index([sessionId])
+  @@map("ai_action_drafts")
+}
+
+enum AiActionStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  EXPIRED
 }
 
 model FaqItem {
