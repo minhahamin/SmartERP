@@ -1,4 +1,4 @@
-import { AiToolsService } from './ai-tools.service';
+import { AiToolsService, searchTerms } from './ai-tools.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
 /**
@@ -74,6 +74,24 @@ describe('AiToolsService — 노출 단계(1차 방어)', () => {
       'draftAnnouncement',
     );
     expect(allowed.policy.hasPermission).toHaveBeenCalledWith(expect.anything(), 'ANNOUNCEMENT', 'CREATE');
+  });
+});
+
+describe('AiToolsService — 도구 후보 좁히기', () => {
+  it('"알려줘" 같은 흔한 말 때문에 쓰기 제안 도구가 후보로 끼어들지 않는다', async () => {
+    // 공지 작성 권한이 있는 관리자도, 문서/규정 질문에는 문서 검색 도구만 후보여야 한다
+    const { service } = build(['DOCUMENT', 'ANNOUNCEMENT', 'PRODUCTION'], true);
+    const exposed = names(await service.getDeclarations(authUser(), '재택근무 지침 알려줘'));
+    expect(exposed).toContain('searchInternalDocuments');
+    expect(exposed).not.toContain('draftAnnouncement');
+    expect(exposed).not.toContain('getProductionOrdersByStatus');
+  });
+
+  it('공지를 쓰겠다고 말하면 공지 초안 도구가 후보에 오른다', async () => {
+    const { service } = build(['ANNOUNCEMENT'], true);
+    expect(names(await service.getDeclarations(authUser(), '전체 공지 작성해줘'))).toContain(
+      'draftAnnouncement',
+    );
   });
 });
 
@@ -158,5 +176,39 @@ describe('AiToolsService — 제안(draft) 도구는 데이터를 직접 바꾸�
     expect(prisma.productionOrder.findFirst).toHaveBeenLastCalledWith({
       where: { companyId: 'company-1', orderNo: 'PO-2026-0001' },
     });
+  });
+});
+
+describe('문서 검색', () => {
+  it('검색어를 단어로 나누고 한 글자/중복은 버린다', () => {
+    expect(searchTerms('재택근무 지침')).toEqual(['재택근무', '지침']);
+    expect(searchTerms('연차, 규정 연차 a')).toEqual(['연차', '규정']);
+    expect(searchTerms('   ')).toEqual([]);
+  });
+
+  it('여러 단어 질문도 단어 하나라도 겹치면 후보로 찾고, 더 많이 겹치는 문서를 앞에 둔다', async () => {
+    const { service, prisma } = build(['DOCUMENT']);
+    (prisma as unknown as { document: { findMany: jest.Mock } }).document = {
+      findMany: jest.fn().mockResolvedValue([
+        { title: '2026년 취업규칙', summary: '지침 일부 언급', category: '인사' },
+        { title: '재택근무 운영 지침', summary: '재택근무는 주 2회까지', category: '인사' },
+      ]),
+    };
+    const result = (await service.execute(
+      'searchInternalDocuments',
+      { query: '재택근무 지침' },
+      authUser(),
+      's',
+    )) as {
+      found: boolean;
+      items: { title: string }[];
+    };
+    expect(result.found).toBe(true);
+    expect(result.items[0].title).toBe('재택근무 운영 지침');
+
+    const where = (prisma as unknown as { document: { findMany: jest.Mock } }).document.findMany.mock
+      .calls[0][0] as { where: { companyId: string; indexStatus: string } };
+    // 회사 스코프와 색인 완료 문서만 검색한다
+    expect(where.where).toMatchObject({ companyId: 'company-1', indexStatus: 'DONE' });
   });
 });

@@ -27,6 +27,21 @@ interface ToolDefinition {
   keywords: string[];
 }
 
+/**
+ * 문서 검색어를 단어로 나눈다. "재택근무 지침"처럼 여러 단어로 묻는 경우가 많은데, 통째로 부분 일치시키면
+ * 제목이 "재택근무 운영 지침"일 때 찾지 못한다. 한 글자 단어는 노이즈가 커서 제외한다.
+ */
+export function searchTerms(query: string): string[] {
+  return [
+    ...new Set(
+      query
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .filter((term) => term.length >= 2),
+    ),
+  ];
+}
+
 /** Gemini가 채워 넣은 함수 인자(unknown)에서 안전하게 문자열만 추출한다 */
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
@@ -197,7 +212,22 @@ export class AiToolsService {
     },
     {
       permission: { resource: 'DOCUMENT' },
-      keywords: ['규정', '정책', '취업규칙', '매뉴얼', '가이드', '문서', '계약', '보고서', '사용법', '절차'],
+      keywords: [
+        '규정',
+        '정책',
+        '지침',
+        '방침',
+        '수칙',
+        '취업규칙',
+        '매뉴얼',
+        '가이드',
+        '문서',
+        '계약',
+        '보고서',
+        '사용법',
+        '절차',
+        '재택',
+      ],
       declaration: {
         name: 'searchInternalDocuments',
         description:
@@ -246,7 +276,8 @@ export class AiToolsService {
       // 공지 작성은 본인 데이터가 아니라 회사 전체에 영향을 주므로, ANNOUNCEMENT:CREATE 권한이 있는
       // 역할(ADMIN/HR_MANAGER 등)에게만 노출한다(draftLeaveRequest와 달리 self-service가 아님).
       permission: { resource: 'ANNOUNCEMENT', action: 'CREATE' },
-      keywords: ['공지', '공지사항', '전체 공지', '알려줘', '작성해줘'],
+      // '알려줘'/'작성해줘' 같은 흔한 말은 넣지 않는다 — 거의 모든 질문에 걸려 이 도구가 늘 후보로 끼어든다
+      keywords: ['공지', '공지사항', '전체 공지', '게시', '안내문'],
       declaration: {
         name: 'draftAnnouncement',
         description:
@@ -269,7 +300,7 @@ export class AiToolsService {
       // 상태 변경은 실제 재고 입고(완료 시)까지 트리거하는 되돌리기 어려운 작업이라
       // PRODUCTION:UPDATE 권한이 있는 역할에게만 노출한다.
       permission: { resource: 'PRODUCTION', action: 'UPDATE' },
-      keywords: ['생산', '오더', '상태', '완료', '지연', '변경', '진행'],
+      keywords: ['생산', '오더', '완료', '지연', '변경'],
       declaration: {
         name: 'draftProductionStatusUpdate',
         description:
@@ -645,24 +676,43 @@ export class AiToolsService {
   }
 
   private async searchInternalDocuments(requester: AuthUser, query: string) {
-    const documents = await this.prisma.document.findMany({
+    const terms = searchTerms(query);
+    const candidates = await this.prisma.document.findMany({
       where: {
         companyId: requester.companyId,
         indexStatus: 'DONE',
         OR: [{ isPublic: true }, { departmentId: requester.departmentId }],
-        AND: query
-          ? [
-              {
-                OR: [
-                  { title: { contains: query, mode: 'insensitive' } },
-                  { summary: { contains: query, mode: 'insensitive' } },
-                ],
-              },
-            ]
-          : undefined,
+        // 단어 중 하나라도 제목/요약에 있으면 후보 — 순위는 아래에서 매긴다
+        AND:
+          terms.length > 0
+            ? [
+                {
+                  OR: terms.flatMap((term) => [
+                    { title: { contains: term, mode: 'insensitive' as const } },
+                    { summary: { contains: term, mode: 'insensitive' as const } },
+                  ]),
+                },
+              ]
+            : undefined,
       },
-      take: 5,
+      take: 30,
     });
+
+    // 제목 일치 2점 + 요약 일치 1점을 단어별로 합산해, 질문과 더 많이 겹치는 문서를 먼저 준다
+    const score = (d: { title: string; summary: string | null }) =>
+      terms.reduce(
+        (sum, term) =>
+          sum +
+          (d.title.toLowerCase().includes(term) ? 2 : 0) +
+          (d.summary?.toLowerCase().includes(term) ? 1 : 0),
+        0,
+      );
+    const documents = candidates
+      .map((d) => ({ d, score: score(d) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(({ d }) => d);
+
     if (documents.length === 0) return { found: false, message: '관련 문서를 찾지 못했습니다.' };
     return {
       found: true,
