@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { AppException } from '../../common/exceptions/app.exception';
 import ExcelJS from 'exceljs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PolicyService } from '../../common/services/policy.service';
@@ -132,6 +133,23 @@ export class ProductionService {
     const order = await this.findOne(id, requester);
     this.policy.assertOwnerOrRole(requester, order.managerId ?? '', FULL_ACCESS_ROLES);
 
+    // 완료/취소는 종착 상태다. 완료를 되돌리면 이미 입고된 재고는 그대로인 채 다시 완료할 수 있어
+    // 같은 오더가 두 번 입고된다(재고 이중 집계). 상태 변경이 필요하면 새 오더를 등록한다.
+    if (order.status === 'COMPLETED' && dto.status !== 'COMPLETED') {
+      throw new AppException(
+        'PRODUCTION_ALREADY_COMPLETED',
+        '이미 완료되어 재고에 입고된 생산 오더는 상태를 되돌릴 수 없습니다.',
+        409,
+      );
+    }
+    if (order.status === 'CANCELLED' && dto.status !== 'CANCELLED') {
+      throw new AppException(
+        'PRODUCTION_ALREADY_CANCELLED',
+        '취소된 생산 오더는 상태를 되돌릴 수 없습니다.',
+        409,
+      );
+    }
+
     if (dto.status === 'COMPLETED') {
       if (order.status === 'COMPLETED') return order; // 멱등: 중복 완료는 이중 입고 없이 반환
       if (!order.warehouseId)
@@ -168,13 +186,22 @@ export class ProductionService {
       });
     }
 
-    return this.prisma.productionOrder.update({
-      where: { id },
+    // 위 검사와 갱신 사이에 다른 요청이 완료 처리했다면 조건부 업데이트가 0건이 되어 거부된다
+    const updated = await this.prisma.productionOrder.updateMany({
+      where: { id, companyId: requester.companyId, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
       data: {
         status: dto.status,
         ...(dto.producedQty !== undefined ? { producedQty: dto.producedQty } : {}),
       },
     });
+    if (updated.count === 0 && dto.status !== order.status) {
+      throw new AppException(
+        'PRODUCTION_STATUS_CONFLICT',
+        '다른 요청이 먼저 오더 상태를 변경했습니다. 새로고침 후 다시 시도해주세요.',
+        409,
+      );
+    }
+    return this.findOne(id, requester);
   }
 
   private async nextOrderNo(companyId: string): Promise<string> {

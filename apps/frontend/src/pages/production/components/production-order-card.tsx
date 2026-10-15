@@ -34,7 +34,12 @@ function ProductionOrderCard({ order, onStatusChange }: ProductionOrderCardProps
       <p className="mt-1.5 text-sm font-medium text-foreground">{order.productName}</p>
       <p className="text-xs text-muted-foreground">{order.lineName} · {order.producedQty}/{order.plannedQty}{order.unit}</p>
       <p className="mt-1 text-xs tabular-nums text-muted-foreground">마감 {order.dueDate.slice(0, 10)}</p>
-      <Select value={order.status} onValueChange={(value) => onStatusChange(value as ProductionStatus)}>
+      <Select
+        value={order.status}
+        // 완료(재고 입고됨)/취소는 종착 상태라 서버가 되돌림을 409로 거부한다 — 화면에서도 잠근다
+        disabled={order.status === 'COMPLETED' || order.status === 'CANCELLED'}
+        onValueChange={(value) => onStatusChange(value as ProductionStatus)}
+      >
         <SelectTrigger size="sm" className="mt-2.5 w-full">
           <SelectValue />
         </SelectTrigger>
