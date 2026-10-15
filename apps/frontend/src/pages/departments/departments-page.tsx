@@ -10,6 +10,8 @@ import { DepartmentTree } from '@/pages/departments/components/department-tree';
 import { DepartmentFormDialog } from '@/pages/departments/components/department-form-dialog';
 import { useDepartments, useUpdateDepartment } from '@/pages/departments/hooks/use-departments';
 import { useEmployees } from '@/pages/employees/hooks/use-employees';
+import { useAuthStore } from '@/stores/auth-store';
+import { hasPermission } from '@/lib/permissions';
 import { EmployeeStatusBadge } from '@/pages/employees/components/employee-status-badge';
 
 function DepartmentsPage() {
@@ -20,6 +22,8 @@ function DepartmentsPage() {
   const [pendingParentId, setPendingParentId] = useState<string | null>(null);
 
   const effectiveDepartmentId = selectedId ?? departments?.[0]?.id;
+  // 직원 목록 권한(USER:READ)이 없는 역할은 인원을 조회할 수 없다 — 0명으로 보이면 거짓 정보가 된다
+  const canReadMembers = useAuthStore((state) => hasPermission(state.user?.permissions, 'USER'));
   const { data: memberResult } = useEmployees({ departmentId: effectiveDepartmentId, page: 1, limit: 100 });
 
   if (isLoading || !departments) {
@@ -57,7 +61,9 @@ function DepartmentsPage() {
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
             <div>
               <h2 className="text-lg font-semibold text-foreground">{selected.name}</h2>
-              <p className="text-sm text-muted-foreground">소속 인원 {members.length}명</p>
+              <p className="text-sm text-muted-foreground">
+                {canReadMembers ? `소속 인원 ${members.length}명` : "소속 인원은 권한이 없어 표시되지 않습니다"}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex flex-col gap-1">
@@ -119,7 +125,7 @@ function DepartmentsPage() {
               {members.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-8 text-center text-muted-foreground">
-                    소속 인원이 없습니다.
+                    {canReadMembers ? "소속 인원이 없습니다." : "직원 목록을 볼 수 있는 권한이 없습니다."}
                   </td>
                 </tr>
               ) : (
