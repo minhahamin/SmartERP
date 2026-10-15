@@ -137,6 +137,42 @@ AI는 데이터를 직접 바꾸지 않고 **초안(Draft)만** 만든다. 화�
 | 분석 | 통계 분석 대시보드 |
 | 일정 | 멀티데이 일정을 캘린더 바(bar)로 표시하는 일정 관리 |
 
+### 화면 갤러리 (사이드바 전 모듈, ADMIN 계정 기준)
+
+**인사**
+
+| 직원 관리 | 급여 관리 |
+|---|---|
+| ![직원 관리](docs/screenshots/07-employees.png) | ![급여 관리](docs/screenshots/08-payroll.png) |
+| **일정 관리** | **부서 관리** |
+| ![일정 관리](docs/screenshots/09-schedule.png) | ![부서 관리](docs/screenshots/10-departments.png) |
+
+**권한 관리 (RBAC 매트릭스)**
+
+![권한 관리](docs/screenshots/11-permissions.png)
+
+**영업/생산**
+
+| 거래처 관리 | 영업(수주) 관리 |
+|---|---|
+| ![거래처 관리](docs/screenshots/12-partners.png) | ![영업 관리](docs/screenshots/13-sales-orders.png) |
+| **제품 관리** | **재고 관리** |
+| ![제품 관리](docs/screenshots/14-products.png) | ![재고 관리](docs/screenshots/15-inventory.png) |
+| **입출고 관리** | **생산 관리** |
+| ![입출고 관리](docs/screenshots/16-stock-movements.png) | ![생산 관리](docs/screenshots/06-production.png) |
+
+**공유**
+
+| 문서 관리 | 공지사항 |
+|---|---|
+| ![문서 관리](docs/screenshots/17-documents.png) | ![공지사항](docs/screenshots/18-announcements.png) |
+
+**통계 분석 (매출 / 재고 / 인사 탭)**
+
+| 매출 | 재고 | 인사 |
+|---|---|---|
+| ![통계-매출](docs/screenshots/19-statistics-sales.png) | ![통계-재고](docs/screenshots/20-statistics-inventory.png) | ![통계-인사](docs/screenshots/21-statistics-hr.png) |
+
 ## 핵심 차별화 포인트
 
 1. **AI 계층까지 일관된 RBAC** — 노출 단계(도구 목록 필터링)와 실행 단계(호출자 실제 권한으로 스코프 강제) 이중 방어. LLM이 잘못된 인자를 만들어도 서버가 신뢰하지 않는다([09](docs/09-ai-chatbot-design.md) 9.3)
