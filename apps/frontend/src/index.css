@@ -150,3 +150,15 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/*
+ * 모바일에서는 표 셀을 줄바꿈하지 않고, 표를 감싼 컨테이너 안에서 가로 스크롤하게 한다.
+ * 그대로 두면 열이 극단적으로 좁아져 한글이 글자 단위로 세로로 쪼개진다("경/영/지/원/팀").
+ * 데스크톱 표시는 바뀌지 않는다.
+ */
+@media (max-width: 767px) {
+  main table th,
+  main table td {
+    white-space: nowrap;
+  }
+}

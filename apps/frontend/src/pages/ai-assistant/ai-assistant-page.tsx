@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { ChevronLeft, Sparkles } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatSidebar } from '@/pages/ai-assistant/components/chat-sidebar';
@@ -9,9 +10,16 @@ import { useChatMessages, useChatSessions, useSendChatMessage } from '@/pages/ai
 
 function AiAssistantPage() {
   const { data: sessions, isLoading: sessionsLoading } = useChatSessions();
-  // 사용자가 직접 고른 세션. 없으면(처음 진입/삭제 직후) 가장 최근 세션을 보여준다.
-  const [pickedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const selectedSessionId = pickedSessionId ?? sessions?.[0]?.id ?? null;
+  // 사용자가 직접 고른 세션. 없거나(처음 진입/삭제 직후) 목록에서 사라졌으면(다른 곳에서 삭제됨) 가장 최근 세션을 보여준다.
+  const [pickedSessionId, setPickedSessionId] = useState<string | null>(null);
+  const pickedStillExists = pickedSessionId !== null && (sessions?.some((s) => s.id === pickedSessionId) ?? true);
+  const selectedSessionId = (pickedStillExists ? pickedSessionId : null) ?? sessions?.[0]?.id ?? null;
+  // 모바일(<md)에서는 대화 목록과 채팅을 한 화면에 나란히 둘 수 없어 둘 중 하나만 보여준다
+  const [mobileListOpen, setMobileListOpen] = useState(false);
+  const setSelectedSessionId = (id: string | null) => {
+    setPickedSessionId(id);
+    setMobileListOpen(false);
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: messages, isLoading: messagesLoading } = useChatMessages(selectedSessionId ?? undefined);
@@ -36,7 +44,7 @@ function AiAssistantPage() {
       </div>
 
       <Card className="flex flex-1 overflow-hidden p-0">
-        <div className="w-56 shrink-0">
+        <div className={cn("shrink-0 md:block md:w-56", mobileListOpen ? "block w-full" : "hidden")}>
           <ChatSidebar
             selectedSessionId={selectedSessionId}
             onSelectSession={setSelectedSessionId}
@@ -46,7 +54,14 @@ function AiAssistantPage() {
           />
         </div>
 
-        <div className="flex flex-1 flex-col">
+        <div className={cn("min-w-0 flex-1 flex-col md:flex", mobileListOpen ? "hidden" : "flex")}>
+          <button
+            type="button"
+            onClick={() => setMobileListOpen(true)}
+            className="flex items-center gap-1 border-b border-border px-3 py-2 text-sm font-medium text-muted-foreground md:hidden"
+          >
+            <ChevronLeft className="size-4" /> 대화 목록
+          </button>
           {!selectedSessionId ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
               <Sparkles className="size-8 text-ai-accent" />
