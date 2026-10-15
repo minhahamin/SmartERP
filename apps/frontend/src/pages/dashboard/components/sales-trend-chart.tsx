@@ -25,11 +25,11 @@ function SalesTrendChart({ data }: { data: SalesTrendPoint[] }) {
               axisLine={false}
               width={48}
               tick={{ fontSize: 12, fill: '#64748b' }}
-              tickFormatter={(value: number) => `${value}백만`}
+              tickFormatter={(value: number) => `${Number((value / 1_000_000).toFixed(1))}백만`}
             />
             <Tooltip
               cursor={{ stroke: '#ec4899', strokeWidth: 1, strokeDasharray: '4 4' }}
-              formatter={(value) => [`₩${Number(value).toLocaleString()}백만`, '매출']}
+              formatter={(value) => [`₩${Number(value).toLocaleString()}`, '매출']}
               contentStyle={{ borderRadius: 8, borderColor: '#e2e8f0', fontSize: 12 }}
             />
             <Area type="monotone" dataKey="revenue" stroke="#ec4899" strokeWidth={2} fill="url(#salesGradient)" />

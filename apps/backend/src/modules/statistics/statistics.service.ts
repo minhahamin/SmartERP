@@ -288,9 +288,15 @@ export class StatisticsService {
     }
   }
 
-  private async sumRevenueSince(companyId: string, since: Date): Promise<number> {
+  /** monthStart가 속한 달의 매출 합계 — 상한 없이 gte만 걸면 다음 달 이후 주문까지 합산되므로 월말까지로 제한한다 */
+  private async sumRevenueSince(companyId: string, monthStart: Date): Promise<number> {
+    const nextMonthStart = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
     const agg = await this.prisma.salesOrder.aggregate({
-      where: { companyId, orderDate: { gte: since }, status: { not: 'CANCELLED' } },
+      where: {
+        companyId,
+        orderDate: { gte: monthStart, lt: nextMonthStart },
+        status: { not: 'CANCELLED' },
+      },
       _sum: { totalAmount: true },
     });
     return Number(agg._sum.totalAmount ?? 0);
@@ -334,7 +340,7 @@ export class StatisticsService {
     return this.prisma.$queryRaw<
       { id: string; name: string; quantity: number; safetyStock: number; warehouseName: string }[]
     >`
-      SELECT p.id, p.name, i.quantity, p."safetyStock", w.name as "warehouseName"
+      SELECT i.id, p.name, i.quantity, p."safetyStock", w.name as "warehouseName"
       FROM inventories i
       JOIN products p ON p.id = i."productId"
       JOIN warehouses w ON w.id = i."warehouseId"
