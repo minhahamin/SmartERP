@@ -9,14 +9,10 @@ import { useChatMessages, useChatSessions, useSendChatMessage } from '@/pages/ai
 
 function AiAssistantPage() {
   const { data: sessions, isLoading: sessionsLoading } = useChatSessions();
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  // 사용자가 직접 고른 세션. 없으면(처음 진입/삭제 직후) 가장 최근 세션을 보여준다.
+  const [pickedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const selectedSessionId = pickedSessionId ?? sessions?.[0]?.id ?? null;
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!selectedSessionId && sessions && sessions.length > 0) {
-      setSelectedSessionId(sessions[0].id);
-    }
-  }, [sessions, selectedSessionId]);
 
   const { data: messages, isLoading: messagesLoading } = useChatMessages(selectedSessionId ?? undefined);
   const sendMessage = useSendChatMessage(selectedSessionId ?? undefined);

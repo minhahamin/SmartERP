@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { X } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -24,12 +25,12 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
   const updateItem = useUpdatePayrollItem();
   const transition = useTransitionPayrollStatus();
 
-  useEffect(() => {
+  useSyncOnChange([record], () => {
     if (record) {
       setAllowances(record.allowances);
       setDeductions(record.deductions);
     }
-  }, [record]);
+  });
 
   if (!record) return null;
 

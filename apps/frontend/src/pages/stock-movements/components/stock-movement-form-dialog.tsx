@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,8 +26,9 @@ const REF_TYPE_LABEL: Record<StockRefType, string> = {
 };
 
 function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementFormDialogProps) {
-  const [productId, setProductId] = useState('');
-  const [warehouseId, setWarehouseId] = useState('');
+  // 사용자가 고르기 전에는 목록의 첫 항목을 기본값으로 쓴다(effect로 state에 복사하지 않고 계산한다)
+  const [pickedProductId, setProductId] = useState('');
+  const [pickedWarehouseId, setWarehouseId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [refType, setRefType] = useState<StockRefType>(mode === 'IN' ? 'PURCHASE' : 'SALES');
   const [memo, setMemo] = useState('');
@@ -36,19 +37,9 @@ function StockMovementFormDialog({ open, onOpenChange, mode }: StockMovementForm
   const createMovement = useCreateStockMovement();
   const { data: warehouses } = useWarehouses();
   const { data: products } = useProducts({});
+  const productId = pickedProductId || products?.[0]?.id || '';
+  const warehouseId = pickedWarehouseId || warehouses?.[0]?.id || '';
   const { data: inventoryRows } = useInventory(warehouseId);
-
-  useEffect(() => {
-    if (!warehouseId && warehouses && warehouses.length > 0) {
-      setWarehouseId(warehouses[0].id);
-    }
-  }, [warehouses, warehouseId]);
-
-  useEffect(() => {
-    if (!productId && products && products.length > 0) {
-      setProductId(products[0].id);
-    }
-  }, [products, productId]);
 
   const submit = () => {
     createMovement.mutate(

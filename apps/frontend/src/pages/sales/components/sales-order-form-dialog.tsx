@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Plus, Trash2 } from 'lucide-react';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -28,15 +29,14 @@ function SalesOrderFormDialog({ open, onOpenChange }: SalesOrderFormDialogProps)
   const { data: partners } = usePartners({});
   const { data: products } = useProducts({});
 
-  useEffect(() => {
+  useSyncOnChange([open, partners, products], () => {
     if (!open) return;
     if (!partnerId && partners && partners.length > 0) setPartnerId(partners[0].id);
     if (!orderDate) setOrderDate(new Date().toISOString().slice(0, 10));
     if (items.length === 0 && products && products.length > 0) {
       setItems([{ productId: products[0].id, quantity: 1, unitPrice: products[0].salePrice }]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, partners, products]);
+  });
 
   const addItem = () => {
     const firstProduct = products?.[0];

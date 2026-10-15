@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, ClipboardCheck, Settings, Warehouse as WarehouseIcon } from 'lucide-react';
 import { PageHeader } from '@/components/common/page-header';
 import { Card } from '@/components/ui/card';
@@ -15,19 +15,17 @@ import { cn } from '@/lib/utils';
 
 function InventoryPage() {
   const { data: warehouses, isLoading: warehousesLoading } = useWarehouses();
-  const [warehouseId, setWarehouseId] = useState<string | null>(null);
+  // 사용자가 고른 창고. 없거나 삭제돼 목록에 없으면 첫 창고를 보여준다.
+  const [pickedWarehouseId, setWarehouseId] = useState<string | null>(null);
   const [stockTakeOpen, setStockTakeOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
 
-  useEffect(() => {
-    if (!warehouses) return;
-    if (!warehouseId || !warehouses.some((w) => w.id === warehouseId)) {
-      setWarehouseId(warehouses[0]?.id ?? null);
-    }
-  }, [warehouses, warehouseId]);
+  const warehouseId = warehouses?.some((w) => w.id === pickedWarehouseId)
+    ? pickedWarehouseId
+    : (warehouses?.[0]?.id ?? null);
 
   const { data: rows, isLoading: inventoryLoading } = useInventory(warehouseId ?? '');
-  const lowStockRows = rows?.filter((r) => r.quantity < r.safetyStock) ?? [];
+  const lowStockRows = rows?.filter((r) => r.quantity <= r.safetyStock) ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +68,7 @@ function InventoryPage() {
               {lowStockRows.length > 0 && (
                 <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
                   <AlertTriangle className="size-4 shrink-0" />
-                  안전재고 미달 품목이 {lowStockRows.length}건 있습니다.
+                  {w.name}에 안전재고 미달 품목이 {lowStockRows.length}건 있습니다.
                 </div>
               )}
               <Card className="overflow-hidden p-0">
@@ -95,7 +93,7 @@ function InventoryPage() {
                     </thead>
                     <tbody>
                       {rows.map((row) => {
-                        const low = row.quantity < row.safetyStock;
+                        const low = row.quantity <= row.safetyStock;
                         return (
                           <tr key={row.productId} className={cn('border-b border-border last:border-0', low && 'bg-red-50/60')}>
                             <td className="px-4 py-2.5">

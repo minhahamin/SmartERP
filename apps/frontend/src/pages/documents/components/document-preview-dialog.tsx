@@ -19,7 +19,6 @@ function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentP
     if (!document) return;
     let revoked = false;
     let objectUrl: string | null = null;
-    setFileUrl(null);
     fetchDocumentFileUrl(document.id)
       .then(({ url, filename }) => {
         if (revoked) {
@@ -36,6 +35,8 @@ function DocumentPreviewDialog({ document, onOpenChange, onReupload }: DocumentP
     return () => {
       revoked = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
+      // 다음 문서를 불러오는 동안 이전 문서가 보이지 않도록 정리 단계에서 비운다
+      setFileUrl(null);
     };
   }, [document]);
 

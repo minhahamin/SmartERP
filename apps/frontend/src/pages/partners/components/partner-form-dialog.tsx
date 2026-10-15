@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,7 +37,7 @@ function PartnerFormDialog({ open, onOpenChange, partner }: PartnerFormDialogPro
   const isEdit = Boolean(partner);
   const isSubmitting = createPartner.isPending || updatePartner.isPending;
 
-  useEffect(() => {
+  useSyncOnChange([open, partner, defaultManagerId], () => {
     if (!open) return;
     if (partner) {
       setForm({
@@ -53,7 +54,7 @@ function PartnerFormDialog({ open, onOpenChange, partner }: PartnerFormDialogPro
     } else {
       setForm({ ...EMPTY_FORM, managerId: defaultManagerId });
     }
-  }, [open, partner, defaultManagerId]);
+  });
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();

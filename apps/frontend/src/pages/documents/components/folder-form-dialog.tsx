@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,9 +20,9 @@ function FolderFormDialog({ open, onOpenChange, folder }: FolderFormDialogProps)
   const isEdit = Boolean(folder);
   const isSubmitting = createFolder.isPending || updateFolder.isPending;
 
-  useEffect(() => {
+  useSyncOnChange([open, folder], () => {
     if (open) setName(folder?.name ?? '');
-  }, [open, folder]);
+  });
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();

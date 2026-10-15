@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,11 +17,11 @@ function StockTakeDialog({ open, onOpenChange, warehouseId, rows }: StockTakeDia
   const [counts, setCounts] = useState<Record<string, number>>({});
   const submitStockTake = useSubmitStockTake();
 
-  useEffect(() => {
+  useSyncOnChange([open, rows], () => {
     if (open) {
       setCounts(Object.fromEntries(rows.map((r) => [r.productId, r.quantity])));
     }
-  }, [open, rows]);
+  });
 
   const handleSubmit = () => {
     submitStockTake.mutate(

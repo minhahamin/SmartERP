@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,12 +24,12 @@ function MyProfileEditDialog({ open, onOpenChange, employee }: MyProfileEditDial
   const updateEmployee = useUpdateEmployee();
   const patchUser = useAuthStore((state) => state.patchUser);
 
-  useEffect(() => {
+  useSyncOnChange([open, employee], () => {
     if (open) {
       setPhone(employee.phone ?? '');
       setEmail(employee.email);
     }
-  }, [open, employee]);
+  });
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();

@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Copy } from 'lucide-react';
 import {
   Dialog,
@@ -51,7 +52,7 @@ function EmployeeFormDialog({ open, onOpenChange, employee }: EmployeeFormDialog
   const isEdit = Boolean(employee);
   const isSubmitting = createEmployee.isPending || updateEmployee.isPending;
 
-  useEffect(() => {
+  useSyncOnChange([open, employee, roles], () => {
     if (!open) return;
     setTemporaryPassword(null);
     if (employee) {
@@ -69,7 +70,7 @@ function EmployeeFormDialog({ open, onOpenChange, employee }: EmployeeFormDialog
       const defaultRoleId = roles?.find((r) => r.name === 'EMPLOYEE')?.id ?? roles?.[0]?.id ?? '';
       setForm({ ...EMPTY_FORM, roleId: defaultRoleId });
     }
-  }, [open, employee, roles]);
+  });
 
   const handleClose = (nextOpen: boolean) => {
     if (!nextOpen) setTemporaryPassword(null);

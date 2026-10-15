@@ -41,7 +41,5 @@ jobs:
           cache: npm
           cache-dependency-path: apps/frontend/package-lock.json
       - run: npm ci
-      # React 19 신규 규칙(react-hooks/set-state-in-effect) 위반이 남아 있어 린트는 경고 용도로만 실행한다
       - run: npm run lint
-        continue-on-error: true
       - run: npm run build

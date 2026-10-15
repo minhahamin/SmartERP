@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,11 +22,11 @@ function WarehouseFormDialog({ open, onOpenChange, warehouse }: WarehouseFormDia
   const isEdit = Boolean(warehouse);
   const isSubmitting = createWarehouse.isPending || updateWarehouse.isPending;
 
-  useEffect(() => {
+  useSyncOnChange([open, warehouse], () => {
     if (open) {
       setForm(warehouse ? { name: warehouse.name, location: warehouse.location ?? '' } : EMPTY_FORM);
     }
-  }, [open, warehouse]);
+  });
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/components/common/page-header';
 import { Card } from '@/components/ui/card';
@@ -18,12 +18,6 @@ function DepartmentsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingParentId, setPendingParentId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!selectedId && departments && departments.length > 0) {
-      setSelectedId(departments[0].id);
-    }
-  }, [departments, selectedId]);
 
   const effectiveDepartmentId = selectedId ?? departments?.[0]?.id;
   const { data: memberResult } = useEmployees({ departmentId: effectiveDepartmentId, page: 1, limit: 100 });

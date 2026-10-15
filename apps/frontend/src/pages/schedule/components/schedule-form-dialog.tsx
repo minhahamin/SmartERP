@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +45,7 @@ function ScheduleFormDialog({ open, onOpenChange, defaultDate, event }: Schedule
   const isEdit = Boolean(event);
   const isSubmitting = createSchedule.isPending || updateSchedule.isPending;
 
-  useEffect(() => {
+  useSyncOnChange([open, event, defaultDate], () => {
     if (open) {
       setForm(
         event
@@ -60,7 +61,7 @@ function ScheduleFormDialog({ open, onOpenChange, defaultDate, event }: Schedule
           : { ...EMPTY_FORM, date: defaultDate },
       );
     }
-  }, [open, event, defaultDate]);
+  });
 
   const handleSubmit = (formEvent: FormEvent) => {
     formEvent.preventDefault();

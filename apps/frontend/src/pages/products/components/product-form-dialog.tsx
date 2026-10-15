@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,7 +34,7 @@ function ProductFormDialog({ open, onOpenChange, product }: ProductFormDialogPro
   const isEdit = Boolean(product);
   const isSubmitting = createProduct.isPending || updateProduct.isPending || uploadImage.isPending;
 
-  useEffect(() => {
+  useSyncOnChange([open, product], () => {
     if (!open) return;
     setImageFile(undefined);
     if (product) {
@@ -51,7 +52,7 @@ function ProductFormDialog({ open, onOpenChange, product }: ProductFormDialogPro
       setForm(EMPTY_FORM);
       setImagePreviewUrl(undefined);
     }
-  }, [open, product]);
+  });
 
   const handleImageChange = (file: File | undefined) => {
     setImageFile(file);

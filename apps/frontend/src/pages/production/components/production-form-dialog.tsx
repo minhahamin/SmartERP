@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +27,7 @@ function ProductionFormDialog({ open, onOpenChange }: ProductionFormDialogProps)
   const { data: products } = useProducts({});
   const { data: warehouses } = useWarehouses();
 
-  useEffect(() => {
+  useSyncOnChange([open, products, warehouses], () => {
     if (!open) return;
     if (!productId && products && products.length > 0) setProductId(products[0].id);
     if (!warehouseId && warehouses && warehouses.length > 0) setWarehouseId(warehouses[0].id);
@@ -37,8 +38,7 @@ function ProductionFormDialog({ open, onOpenChange }: ProductionFormDialogProps)
       setStartDate(today.toISOString().slice(0, 10));
       setDueDate(due.toISOString().slice(0, 10));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, products, warehouses]);
+  });
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();

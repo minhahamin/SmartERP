@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,14 +31,13 @@ function UploadFormDialog({ file, onOpenChange, defaultFolderId }: UploadFormDia
   const uploadDocument = useUploadDocument();
   const { data: folders } = useDocumentFolders();
 
-  useEffect(() => {
+  useSyncOnChange([file], () => {
     if (file) {
       setTitle(file.name.replace(/\.[^/.]+$/, ''));
       setFolderId(defaultFolderId && defaultFolderId !== 'ALL' ? defaultFolderId : (folders?.[0]?.id ?? ''));
       setCategory('ETC');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file]);
+  });
 
   if (!file) return null;
 

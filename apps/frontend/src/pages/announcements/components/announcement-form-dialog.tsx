@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import { useSyncOnChange } from '@/hooks/use-sync-on-change';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +30,7 @@ function AnnouncementFormDialog({ open, onOpenChange, announcement }: Announceme
   const isEdit = Boolean(announcement);
   const isSubmitting = createAnnouncement.isPending || updateAnnouncement.isPending;
 
-  useEffect(() => {
+  useSyncOnChange([open, announcement], () => {
     if (open) {
       setForm(
         announcement
@@ -42,7 +43,7 @@ function AnnouncementFormDialog({ open, onOpenChange, announcement }: Announceme
           : EMPTY_FORM,
       );
     }
-  }, [open, announcement]);
+  });
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
