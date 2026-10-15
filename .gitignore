@@ -1,0 +1,21 @@
+# dependencies / build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# env (예시 파일만 커밋)
+.env
+.env.local
+.env.*.local
+
+# logs / OS / editor
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 로컬 도구 산출물
+.playwright-mcp/
+.claude/
