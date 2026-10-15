@@ -18,6 +18,16 @@ function sum(values: Record<string, number>) {
   return Object.values(values).reduce((a, b) => a + b, 0);
 }
 
+/** 시드/기본 급여 항목의 키는 영문이라 화면에는 한글 이름으로 보여준다(직접 추가한 항목은 입력한 이름 그대로) */
+const ITEM_LABEL: Record<string, string> = {
+  mealAllowance: '식대',
+  positionAllowance: '직책수당',
+  incomeTax: '소득세',
+  healthInsurance: '건강보험',
+  nationalPension: '국민연금',
+};
+const itemLabel = (key: string) => ITEM_LABEL[key] ?? key;
+
 function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollDetailSheetProps) {
   const [allowances, setAllowances] = useState<Record<string, number>>({});
   const [deductions, setDeductions] = useState<Record<string, number>>({});
@@ -33,6 +43,9 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
   });
 
   if (!record) return null;
+
+  // 확정/지급된 급여는 서버가 수정을 409로 거부하므로 화면에서도 입력을 잠근다
+  const locked = readOnly || record.status !== 'DRAFT';
 
   const netSalary = record.baseSalary + sum(allowances) - sum(deductions);
   const isDirty = JSON.stringify(allowances) !== JSON.stringify(record.allowances) || JSON.stringify(deductions) !== JSON.stringify(record.deductions);
@@ -67,34 +80,34 @@ function PayrollDetailSheet({ record, onOpenChange, readOnly = false }: PayrollD
 
             <Section
               title="수당"
-              readOnly={readOnly}
+              readOnly={locked}
               onAdd={(label, value) => addEntry(setAllowances, allowances, label, value)}
             >
               {Object.entries(allowances).map(([key, value]) => (
                 <Row
                   key={key}
-                  label={key}
+                  label={itemLabel(key)}
                   value={value}
-                  readOnly={readOnly}
+                  readOnly={locked}
                   onChange={(next) => setAllowances({ ...allowances, [key]: next })}
-                  onRemove={readOnly ? undefined : () => removeKey(setAllowances, allowances, key)}
+                  onRemove={locked ? undefined : () => removeKey(setAllowances, allowances, key)}
                 />
               ))}
             </Section>
 
             <Section
               title="공제"
-              readOnly={readOnly}
+              readOnly={locked}
               onAdd={(label, value) => addEntry(setDeductions, deductions, label, value)}
             >
               {Object.entries(deductions).map(([key, value]) => (
                 <Row
                   key={key}
-                  label={key}
+                  label={itemLabel(key)}
                   value={value}
-                  readOnly={readOnly}
+                  readOnly={locked}
                   onChange={(next) => setDeductions({ ...deductions, [key]: next })}
-                  onRemove={readOnly ? undefined : () => removeKey(setDeductions, deductions, key)}
+                  onRemove={locked ? undefined : () => removeKey(setDeductions, deductions, key)}
                 />
               ))}
             </Section>
