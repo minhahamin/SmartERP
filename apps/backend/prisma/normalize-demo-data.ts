@@ -59,6 +59,35 @@ async function main() {
       await tx.productionOrder.update({ where: { id: order.id }, data: { status: 'IN_PROGRESS', dueDate } });
     }
 
+    // 4-2) 입고 창고가 없는 미완료 오더는 완료 처리가 불가능하다("입고 창고를 먼저 지정" 400).
+    //      데모에서 어떤 오더도 완료할 수 없지 않도록 회사의 "본사 창고"(없으면 첫 창고)를 지정한다.
+    let warehousesAssigned = 0;
+    for (const company of await tx.company.findMany({ select: { id: true } })) {
+      const warehouse =
+        (await tx.warehouse.findFirst({ where: { companyId: company.id, name: '본사 창고' } })) ??
+        (await tx.warehouse.findFirst({ where: { companyId: company.id }, orderBy: { name: 'asc' } }));
+      if (!warehouse) continue;
+      const assigned = await tx.productionOrder.updateMany({
+        where: { companyId: company.id, warehouseId: null, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        data: { warehouseId: warehouse.id },
+      });
+      warehousesAssigned += assigned.count;
+    }
+
+    // 4-3) 재고 화면의 "최근 변동일"(updatedAt)이 시드 시점에 멈춰 입출고 이력과 어긋나므로 마지막 이력 시각에 맞춘다
+    const inventoryDates = await tx.$executeRaw`
+      UPDATE inventories i
+      SET "updatedAt" = m.last_at
+      FROM (
+        SELECT "productId", "warehouseId", MAX("createdAt") AS last_at
+        FROM stock_movements
+        GROUP BY "productId", "warehouseId"
+      ) m
+      WHERE m."productId" = i."productId"
+        AND m."warehouseId" = i."warehouseId"
+        AND i."updatedAt" <> m.last_at
+    `;
+
     // 5) 급여 — 지난 달까지는 지급완료, 이번 달은 초안, 이후 달은 존재할 수 없다
     const futurePayrolls = await tx.payroll.deleteMany({
       where: { OR: [{ payYear: { gt: payYear } }, { payYear, payMonth: { gt: payMonth } }] },
@@ -93,6 +122,8 @@ async function main() {
       productionOverdue: overdue.count,
       productionNotOverdue: notOverdue.count,
       productionRecoveredToInProgress: recovered.length,
+      productionWarehousesAssigned: warehousesAssigned,
+      inventoryDatesAligned: inventoryDates,
       payrollCurrentMonthToDraft: currentPayrolls.count,
       payrollPastToPaid: pastPayrolls.count,
       announcements: announcements.count,
