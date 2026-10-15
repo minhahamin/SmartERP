@@ -19,6 +19,13 @@ const LEGEND: { label: string; className: string }[] = [
 
 const now = new Date();
 
+/** 일정 추가의 기본 날짜 — 보고 있는 달이 이번 달이면 오늘, 아니면 그 달 1일 */
+function defaultEventDate(year: number, month: number): string {
+  const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+  return isCurrentMonth ? `${yearMonth}-${String(now.getDate()).padStart(2, '0')}` : `${yearMonth}-01`;
+}
+
 function SchedulePage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -98,7 +105,7 @@ function SchedulePage() {
       <ScheduleFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
-        defaultDate={`${year}-${String(month).padStart(2, '0')}-01`}
+        defaultDate={defaultEventDate(year, month)}
         event={editingEvent}
       />
 

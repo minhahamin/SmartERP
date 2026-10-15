@@ -21,7 +21,7 @@ function SidebarNavItem({ item, collapsed = false, onNavigate }: SidebarNavItemP
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          'group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors',
+          'group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
           collapsed && 'justify-center px-0 py-2.5',
           isActive
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'

@@ -21,12 +21,19 @@ import { useAuthStore } from '@/stores/auth-store';
 import { Wallet } from 'lucide-react';
 import type { PayrollRecord } from '@/pages/payroll/api/payroll-api';
 
-const MONTH_OPTIONS = [
-  { year: 2026, month: 4, label: '2026년 04월' },
-  { year: 2026, month: 5, label: '2026년 05월' },
-  { year: 2026, month: 6, label: '2026년 06월' },
-  { year: 2026, month: 7, label: '2026년 07월' },
-];
+const MONTH_COUNT = 12;
+
+/** 이번 달을 마지막 항목으로 하는 최근 12개월 — 하드코딩하면 데이터가 쌓여도 새 달을 고를 수 없다 */
+function buildMonthOptions(now: Date = new Date()) {
+  return Array.from({ length: MONTH_COUNT }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (MONTH_COUNT - 1 - i), 1);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    return { year, month, label: `${year}년 ${String(month).padStart(2, '0')}월` };
+  });
+}
+
+const MONTH_OPTIONS = buildMonthOptions();
 
 function PayrollPage() {
   const role = useAuthStore((state) => state.user?.role);
@@ -35,7 +42,7 @@ function PayrollPage() {
 }
 
 function PayrollManagementView() {
-  const [monthIndex, setMonthIndex] = useState(2); // 2026-06
+  const [monthIndex, setMonthIndex] = useState(MONTH_OPTIONS.length - 1); // 이번 달
   const { year, month } = MONTH_OPTIONS[monthIndex];
   const { data: records, isLoading } = usePayrollList(year, month);
   const generate = useGenerateMonthlyPayroll();

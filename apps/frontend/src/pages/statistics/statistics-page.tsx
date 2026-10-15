@@ -55,7 +55,7 @@ function SalesStatsView() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <ChartCard title="월별 매출 추이" data={data.monthlyTrend} filename="monthly-sales.csv">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 256 }}>
           <LineChart data={data.monthlyTrend}>
             <CartesianGrid vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
@@ -66,7 +66,7 @@ function SalesStatsView() {
         </ResponsiveContainer>
       </ChartCard>
       <ChartCard title="거래처별 매출 Top 5" data={data.byPartner} filename="sales-by-partner.csv">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 256 }}>
           <BarChart data={data.byPartner} layout="vertical" margin={{ left: 24 }}>
             <CartesianGrid horizontal={false} stroke="#e2e8f0" />
             <XAxis type="number" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={formatMillion} />
@@ -87,7 +87,7 @@ function InventoryStatsView() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <ChartCard title="창고별 재고 수량" data={data.byWarehouse} filename="inventory-by-warehouse.csv">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 256 }}>
           <BarChart data={data.byWarehouse}>
             <CartesianGrid vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
@@ -98,7 +98,7 @@ function InventoryStatsView() {
         </ResponsiveContainer>
       </ChartCard>
       <ChartCard title="분류별 재고 비중" data={data.byCategory} filename="inventory-by-category.csv">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 256 }}>
           <PieChart>
             <Pie data={data.byCategory} dataKey="value" nameKey="label" innerRadius={50} outerRadius={80} paddingAngle={2}>
               {data.byCategory.map((entry, index) => (
@@ -121,7 +121,7 @@ function HrStatsView() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <ChartCard title="부서별 인원" data={data.byDepartment} filename="headcount-by-department.csv">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 256 }}>
           <BarChart data={data.byDepartment}>
             <CartesianGrid vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#64748b' }} />
@@ -132,7 +132,7 @@ function HrStatsView() {
         </ResponsiveContainer>
       </ChartCard>
       <ChartCard title="역할별 인원 분포" data={data.byRole} filename="headcount-by-role.csv">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 256 }}>
           <PieChart>
             <Pie data={data.byRole} dataKey="value" nameKey="label" innerRadius={50} outerRadius={80} paddingAngle={2}>
               {data.byRole.map((entry, index) => (
@@ -156,7 +156,7 @@ function EmployeeStatsView() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <ChartCard title="최근 근무 시간(시간)" data={attendance} filename="my-attendance.csv">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 256 }}>
           <BarChart data={attendance}>
             <CartesianGrid vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />

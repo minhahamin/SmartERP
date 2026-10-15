@@ -10,7 +10,7 @@ function SalesTrendChart({ data }: { data: SalesTrendPoint[] }) {
         <CardTitle>매출 추이 (최근 6개월)</CardTitle>
       </CardHeader>
       <div className="h-64 px-2 pb-4">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 480, height: 256 }}>
           <AreaChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">

@@ -29,7 +29,7 @@ function SidebarContent({ collapsed = false, onToggleCollapsed, onNavigate }: Si
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {visibleSections.map((section, index) => (
             <div key={section.title ?? index} className="flex flex-col gap-0.5">
               {section.title && !collapsed && (
