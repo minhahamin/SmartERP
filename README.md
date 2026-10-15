@@ -26,6 +26,10 @@ ERP 데이터(직원/급여/재고/생산/거래처)를 관리하는 동시에, 
 
 ![AI 액션 제안](docs/screenshots/04-ai-action-draft.png)
 
+"확인하고 진행"을 누르면 기존 휴가 서비스를 그대로 거쳐 실제 신청이 접수되고, 카드는 "접수 완료"로 바뀝니다.
+
+![AI 액션 확정](docs/screenshots/24-ai-action-confirmed.png)
+
 ### 대시보드 — 매출 추이 · 안전재고 경고 · 최근 공지
 
 ![대시보드](docs/screenshots/02-dashboard.png)
@@ -173,6 +177,12 @@ AI는 데이터를 직접 바꾸지 않고 **초안(Draft)만** 만든다. 화�
 |---|---|---|
 | ![통계-매출](docs/screenshots/19-statistics-sales.png) | ![통계-재고](docs/screenshots/20-statistics-inventory.png) | ![통계-인사](docs/screenshots/21-statistics-hr.png) |
 
+**계정 · 검색**
+
+| 비밀번호 찾기 (링크는 15분 · 1회용) | 전체 검색 (직원/제품/생산 오더/거래처/공지) |
+|---|---|
+| ![비밀번호 찾기](docs/screenshots/22b-forgot-password-sent.png) | ![전체 검색](docs/screenshots/23-global-search.png) |
+
 ## 핵심 차별화 포인트
 
 1. **AI 계층까지 일관된 RBAC** — 노출 단계(도구 목록 필터링)와 실행 단계(호출자 실제 권한으로 스코프 강제) 이중 방어. LLM이 잘못된 인자를 만들어도 서버가 신뢰하지 않는다([09](docs/09-ai-chatbot-design.md) 9.3)
@@ -193,7 +203,7 @@ cd apps/backend
 npm install
 npx prisma migrate dev
 npm run prisma:seed          # 회사/역할/권한 + 데모 계정 4종
-npm run prisma:seed-demo     # ERP 데모 데이터(직원/재고/생산/거래처 등)
+npm run prisma:seed-demo-all # ERP 데모 데이터(5~12월) + FAQ 후보 + 오늘 날짜 기준 정리(아래 설명)
 npm run dev                  # http://localhost:3000/api/v1 (Swagger: /api/v1/docs)
 
 # 3) Frontend
@@ -202,7 +212,14 @@ npm install
 npm run dev                  # http://localhost:5173
 ```
 
-테스트 (DB 없이 실행되는 단위 테스트 — AI 도구 권한 격리, 제안→확인 패턴, 매출 집계 등):
+> **데모 데이터와 "오늘"** — 시드의 달력은 5~12월로 고정돼 있어, 그대로 두면 앱이 쓰는 실제 시계와 어긋납니다
+> (미래 날짜인데 이미 "출고완료"인 수주, 마감 전인데 "지연"인 생산 오더 등).
+> `prisma:seed-demo-all`의 마지막 단계인 `prisma:normalize-demo`가 **실행 시점의 오늘(KST)** 기준으로 모순된 레코드만 바로잡으며, 여러 번 실행해도 결과가 같습니다(멱등).
+> 이미 시드된 DB(예: 배포 환경)에는 `npm run prisma:normalize-demo`만 실행하면 됩니다.
+
+비밀번호 재설정 메일(선택): `.env`에 `SMTP_HOST` 등을 채우면 실제로 발송하고, 비워 두면 개발 환경에서 **서버 로그에 재설정 링크**가 출력됩니다.
+
+테스트 (DB 없이 실행되는 단위 테스트 — AI 도구 권한 격리, 제안→확인 패턴, 매출 집계, 재설정 토큰 1회용, Gemini 일시 오류 재시도 등):
 
 ```bash
 cd apps/backend
