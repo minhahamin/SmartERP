@@ -21,6 +21,7 @@ import { LEAVE_TYPE_LABEL } from '../leave/leave-constants';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { ProductionService } from '../production/production.service';
 import { createKoreanPdfDoc, pdfDocToBuffer } from '../../common/utils/korean-pdf';
+import { retryTransient } from '../../common/utils/retry-transient';
 import { AiToolsService } from './ai-tools.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
@@ -214,11 +215,13 @@ export class AiChatService {
       ...questionCounts.map((q) => `- ${q.sample} | ${q.count}`),
     ].join('\n');
 
-    const response = await this.gemini.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: { responseMimeType: 'application/json' },
-    });
+    const response = await retryTransient(() =>
+      this.gemini!.models.generateContent({
+        model: MODEL,
+        contents: prompt,
+        config: { responseMimeType: 'application/json' },
+      }),
+    );
 
     let clusters: {
       representativeQuestion: string;
@@ -302,14 +305,16 @@ export class AiChatService {
     let turn = 0;
     try {
       while (turn < MAX_TOOL_TURNS) {
-        const response = await this.gemini.models.generateContent({
-          model: MODEL,
-          contents,
-          config: {
-            systemInstruction: buildSystemPrompt(),
-            tools: declarations.length > 0 ? [{ functionDeclarations: declarations }] : undefined,
-          },
-        });
+        const response = await retryTransient(() =>
+          this.gemini!.models.generateContent({
+            model: MODEL,
+            contents,
+            config: {
+              systemInstruction: buildSystemPrompt(),
+              tools: declarations.length > 0 ? [{ functionDeclarations: declarations }] : undefined,
+            },
+          }),
+        );
         totalTokens += response.usageMetadata?.totalTokenCount ?? 0;
 
         const calls = response.functionCalls ?? [];
