@@ -177,11 +177,31 @@ AI는 데이터를 직접 바꾸지 않고 **초안(Draft)만** 만든다. 화�
 |---|---|---|
 | ![통계-매출](docs/screenshots/19-statistics-sales.png) | ![통계-재고](docs/screenshots/20-statistics-inventory.png) | ![통계-인사](docs/screenshots/21-statistics-hr.png) |
 
+**모바일 (390px) — 메뉴는 햄버거, 표는 가로 스크롤, AI 채팅은 목록/대화 전환**
+
+| 대시보드 | AI 어시스턴트 | 급여 관리 |
+|---|---|---|
+| ![모바일 대시보드](docs/screenshots/m1-dashboard.png) | ![모바일 AI](docs/screenshots/m2-ai-assistant.png) | ![모바일 급여](docs/screenshots/m3-payroll.png) |
+
 **계정 · 검색**
 
 | 비밀번호 찾기 (링크는 15분 · 1회용) | 전체 검색 (직원/제품/생산 오더/거래처/공지) |
 |---|---|
 | ![비밀번호 찾기](docs/screenshots/22b-forgot-password-sent.png) | ![전체 검색](docs/screenshots/23-global-search.png) |
+
+## 배포 환경변수 (Railway)
+
+백엔드 서비스의 **Variables**에 아래 값을 설정합니다. `DATABASE_URL`, `JWT_ACCESS_SECRET`, `CORS_ORIGIN`은 필수이고 나머지는 기능별 선택입니다.
+
+| 변수 | 용도 | 비고 |
+|---|---|---|
+| `GEMINI_API_KEY` | AI 어시스턴트·문서 요약·FAQ 생성 | 없으면 AI 기능이 비활성화됩니다 |
+| `GEMINI_MODEL` | 사용할 Gemini 모델 이름 | 비우면 `gemini-2.5-flash`. 무료 등급은 이 모델이 **하루 20회**라 데모가 금방 멈추므로, 결제를 연결하거나 쿼터가 넉넉한 모델로 바꿉니다. 자동 폴백은 아닙니다 |
+| `FRONTEND_URL` | 비밀번호 재설정 메일의 링크 주소 | 예: `https://erpilot-web.up.railway.app`. 비우면 `CORS_ORIGIN`의 첫 값을 씁니다 |
+| `SMTP_HOST` `SMTP_PORT` `SMTP_USER` `SMTP_PASS` | 메일 발송 | 비우면 메일을 보내지 않습니다(운영에서는 링크도 로그에 남기지 않음) |
+| `MAIL_FROM` | 보낸 사람 | 예: `ERPilot <no-reply@도메인>` |
+
+> Gmail은 계정 비밀번호가 아니라 **앱 비밀번호**를 `SMTP_PASS`에 넣어야 하고(`smtp.gmail.com`, 포트 587), Resend·SendGrid 같은 서비스는 각 서비스가 안내하는 SMTP 호스트/키를 씁니다.
 
 ## 핵심 차별화 포인트
 
