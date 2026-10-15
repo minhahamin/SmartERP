@@ -49,7 +49,21 @@ const SYSTEM_PROMPT_LINES = [
   '4. 답변은 간결한 핵심 요약으로 시작하고, 필요하면 목록으로 세부 내용을 정리한다. 불필요한 서론은 생략한다.',
   '5. 문서 검색 결과를 인용할 때는 문서 제목을 함께 언급한다.',
   '6. 도구 인자(예: 제품명, 직원명, 거래처명)는 반드시 사용자가 실제로 언급한 값만 사용한다. 사용자가 특정 이름을 언급하지 않았다면 그 인자를 비워두고 호출하거나(예: 이름 없이 본인 기준 조회), 이름을 지어내지 말고 "전체/목록" 성격의 도구(예: 안전재고 미달 전체 조회)를 사용한다.',
+  '7. "내일", "다음 주 월요일", "이번 달" 같은 상대 날짜 표현은 아래 [현재 시각]을 기준으로 직접 계산해 YYYY-MM-DD로 변환해 도구 인자에 넣는다. 날짜를 사용자에게 되묻지 않는다.',
 ];
+
+/** 상대 날짜 해석을 위해 매 요청마다 KST 기준 오늘 날짜/요일을 프롬프트에 붙인다 */
+export function buildSystemPrompt(now: Date = new Date()): string {
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const date = kst.toISOString().slice(0, 10);
+  const weekday = ['일', '월', '화', '수', '목', '금', '토'][kst.getUTCDay()];
+  return [
+    ...SYSTEM_PROMPT_LINES,
+    '',
+    '[현재 시각]',
+    `오늘은 ${date} (${weekday}요일), 시간대는 KST(Asia/Seoul)이다.`,
+  ].join('\n');
+}
 
 /**
  * docs/09-ai-chatbot-design.md의 Function Calling 오케스트레이션을 Gemini(gemini-2.5-flash)로 구현한다.
@@ -175,7 +189,10 @@ export class AiChatService {
 
     const countByNormalized = new Map<string, { sample: string; count: number }>();
     for (const m of messages) {
-      const normalized = m.content.trim().toLowerCase().replace(/[?!.\s]+$/g, '');
+      const normalized = m.content
+        .trim()
+        .toLowerCase()
+        .replace(/[?!.\s]+$/g, '');
       if (!normalized) continue;
       const existing = countByNormalized.get(normalized);
       if (existing) existing.count += 1;
@@ -203,11 +220,19 @@ export class AiChatService {
       config: { responseMimeType: 'application/json' },
     });
 
-    let clusters: { representativeQuestion: string; answer: string; category: string; matchedCount: number }[];
+    let clusters: {
+      representativeQuestion: string;
+      answer: string;
+      category: string;
+      matchedCount: number;
+    }[];
     try {
-      clusters = JSON.parse(response.text ?? '[]');
+      clusters = JSON.parse(response.text ?? '[]') as typeof clusters;
     } catch (error) {
-      this.logger.error('FAQ 클러스터링 응답 파싱 실패', error instanceof Error ? error.stack : String(error));
+      this.logger.error(
+        'FAQ 클러스터링 응답 파싱 실패',
+        error instanceof Error ? error.stack : String(error),
+      );
       throw new BadRequestException('FAQ 후보 생성 응답을 해석하지 못했습니다. 다시 시도해주세요.');
     }
 
@@ -281,7 +306,7 @@ export class AiChatService {
           model: MODEL,
           contents,
           config: {
-            systemInstruction: SYSTEM_PROMPT_LINES.join('\n'),
+            systemInstruction: buildSystemPrompt(),
             tools: declarations.length > 0 ? [{ functionDeclarations: declarations }] : undefined,
           },
         });
@@ -371,7 +396,12 @@ export class AiChatService {
         });
       }
       case 'ANNOUNCEMENT': {
-        const payload = draft.payload as { title: string; content: string; category?: string; isPinned?: boolean };
+        const payload = draft.payload as {
+          title: string;
+          content: string;
+          category?: string;
+          isPinned?: boolean;
+        };
         const created = await this.announcementsService.create(payload, requester);
         return this.prisma.aiActionDraft.update({
           where: { id: draftId },
@@ -379,7 +409,11 @@ export class AiChatService {
         });
       }
       case 'PRODUCTION_STATUS_UPDATE': {
-        const payload = draft.payload as { productionOrderId: string; status: ProductionStatus; producedQty?: number };
+        const payload = draft.payload as {
+          productionOrderId: string;
+          status: ProductionStatus;
+          producedQty?: number;
+        };
         const updated = await this.productionService.updateStatus(
           payload.productionOrderId,
           { status: payload.status, producedQty: payload.producedQty },
@@ -407,7 +441,8 @@ export class AiChatService {
   async exportActionDraftPdf(draftId: string, requester: AuthUser): Promise<Buffer> {
     const draft = await this.prisma.aiActionDraft.findUnique({ where: { id: draftId } });
     if (!draft) throw new NotFoundException('액션 제안을 찾을 수 없습니다.');
-    if (draft.userId !== requester.sub) throw new ForbiddenException('본인이 요청한 제안만 내려받을 수 있습니다.');
+    if (draft.userId !== requester.sub)
+      throw new ForbiddenException('본인이 요청한 제안만 내려받을 수 있습니다.');
 
     const doc = createKoreanPdfDoc();
     const STATUS_LABEL: Record<string, string> = {
