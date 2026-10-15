@@ -38,7 +38,10 @@ export class AuthService {
   private findActiveUserByEmail(email: string, companyId?: string) {
     return this.prisma.user.findFirst({
       where: { email, status: 'ACTIVE', ...(companyId ? { companyId } : {}) },
-      include: { role: { include: { rolePermissions: { include: { permission: true } } } }, department: true },
+      include: {
+        role: { include: { rolePermissions: { include: { permission: true } } } },
+        department: true,
+      },
       // 로그인 비밀번호 검증과 issueTokens()의 리프레시 토큰 회전에 실제로 필요해 되살린다
       omit: { passwordHash: false, refreshTokenHash: false },
     });
@@ -97,7 +100,10 @@ export class AuthService {
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<IssuedTokens> {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      include: { role: { include: { rolePermissions: { include: { permission: true } } } }, department: true },
+      include: {
+        role: { include: { rolePermissions: { include: { permission: true } } } },
+        department: true,
+      },
       omit: { passwordHash: false, refreshTokenHash: false },
     });
     const passwordMatches = await bcrypt.compare(dto.currentPassword, user.passwordHash);
@@ -134,7 +140,10 @@ export class AuthService {
 
     const user = await this.prisma.user.findFirst({
       where: { refreshTokenHash: tokenHash },
-      include: { role: { include: { rolePermissions: { include: { permission: true } } } }, department: true },
+      include: {
+        role: { include: { rolePermissions: { include: { permission: true } } } },
+        department: true,
+      },
       // issueTokens()의 리프레시 토큰 회전(previousRefreshTokenHash 기록)에 필요해 되살린다
       omit: { refreshTokenHash: false },
     });
@@ -158,7 +167,10 @@ export class AuthService {
       }
       const fresh = await this.prisma.user.findUnique({
         where: { id: reused.id },
-        include: { role: { include: { rolePermissions: { include: { permission: true } } } }, department: true },
+        include: {
+          role: { include: { rolePermissions: { include: { permission: true } } } },
+          department: true,
+        },
         omit: { refreshTokenHash: false },
       });
       if (!fresh) throw new UnauthorizedException('유효하지 않은 Refresh Token입니다.');
@@ -268,7 +280,9 @@ export class AuthService {
         departmentName: user.department?.name ?? null,
         position: user.position,
         mustChangePassword: user.mustChangePassword,
-        permissions: user.role.rolePermissions.map((rp) => `${rp.permission.resource}:${rp.permission.action}`),
+        permissions: user.role.rolePermissions.map(
+          (rp) => `${rp.permission.resource}:${rp.permission.action}`,
+        ),
       },
     };
   }

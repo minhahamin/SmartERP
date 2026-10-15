@@ -32,7 +32,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (prismaCode === 'P2002') {
         response.status(409).json({
           success: false,
-          error: { code: 'DUPLICATE', message: '이미 존재하는 값입니다. 다시 시도해 주세요.', statusCode: 409 },
+          error: {
+            code: 'DUPLICATE',
+            message: '이미 존재하는 값입니다. 다시 시도해 주세요.',
+            statusCode: 409,
+          },
         });
         return;
       }

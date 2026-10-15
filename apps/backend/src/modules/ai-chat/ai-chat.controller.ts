@@ -88,7 +88,9 @@ export class AiChatController {
   @Post('faq/generate')
   @RequirePermissions('DOCUMENT', 'CREATE')
   @Audit('FAQ_GENERATE', 'FAQ')
-  @ApiOperation({ summary: '최근 챗봇 질문 로그에서 반복 질문을 묶어 FAQ 후보를 자동 생성 (Human-in-the-loop 검수 대기)' })
+  @ApiOperation({
+    summary: '최근 챗봇 질문 로그에서 반복 질문을 묶어 FAQ 후보를 자동 생성 (Human-in-the-loop 검수 대기)',
+  })
   generateFaq(@Body('threshold') threshold: number | undefined, @CurrentUser() user: AuthUser) {
     return this.aiChatService.generateFaqCandidates(user, threshold);
   }

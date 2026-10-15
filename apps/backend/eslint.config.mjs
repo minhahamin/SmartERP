@@ -26,4 +26,12 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'warn',
     },
   },
+  {
+    // jest의 expect.*Matcher는 any를 반환하므로 테스트 파일에서는 unsafe 계열 규칙을 완화한다
+    files: ['**/*.spec.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+    },
+  },
 );

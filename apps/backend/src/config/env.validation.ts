@@ -22,7 +22,6 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   // 운영에서는 AI 키 없이 부팅은 허용하되 RAG/AI 호출 시점에 명확한 에러를 내도록 한다.
   // (빌드·헬스체크와 런타임 AI 장애를 분리하기 위함)
   if (isProd && !get('GEMINI_API_KEY')) {
-    // eslint-disable-next-line no-console
     console.warn('[config] GEMINI_API_KEY 미설정 — AI 요약/RAG 기능이 비활성화됩니다.');
   }
 

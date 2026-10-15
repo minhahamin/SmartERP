@@ -27,7 +27,11 @@ export class ProductionController {
   @Get('export')
   @RequirePermissions('PRODUCTION', 'READ')
   @ApiOperation({ summary: '목록과 동일한 필터로 생산현황을 Excel(.xlsx)로 내려받기' })
-  async exportExcel(@Query() query: ProductionOrderQueryDto, @CurrentUser() user: AuthUser, @Res() res: Response) {
+  async exportExcel(
+    @Query() query: ProductionOrderQueryDto,
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+  ) {
     const buffer = await this.productionService.exportToExcel(query, user);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="production-orders-${Date.now()}.xlsx"`);

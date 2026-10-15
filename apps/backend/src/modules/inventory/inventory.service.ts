@@ -15,7 +15,9 @@ export class InventoryService {
 
     // belowSafetyStock은 quantity <= product.safetyStock 비교가 필요해 Prisma where로
     // 직접 표현이 안 되므로 범위를 창고/테넌트로 좁혀 최대 5000건까지만 읽고 메모리 필터한다.
-    const capped = query.belowSafetyStock ? { skip: 0, take: 5000 } : { skip: (query.page - 1) * query.limit, take: query.limit };
+    const capped = query.belowSafetyStock
+      ? { skip: 0, take: 5000 }
+      : { skip: (query.page - 1) * query.limit, take: query.limit };
     let items = await this.prisma.inventory.findMany({
       where,
       include: { product: true, warehouse: true },
@@ -45,7 +47,8 @@ export class InventoryService {
     });
     if (ownedProducts.length !== new Set(dto.items.map((i) => i.productId)).size) {
       throw new NotFoundException('소속 회사의 제품이 아닌 품목이 포함되어 있습니다.');
-    }    const beforeMap = new Map(
+    }
+    const beforeMap = new Map(
       (
         await this.prisma.inventory.findMany({
           where: { warehouseId: dto.warehouseId, productId: { in: dto.items.map((i) => i.productId) } },

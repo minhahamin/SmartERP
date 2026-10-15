@@ -7,7 +7,13 @@ import { LeaveService } from '../leave/leave.service';
 import { LEAVE_TYPE_LABEL } from '../leave/leave-constants';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
-const VALID_PRODUCTION_STATUSES: ProductionStatus[] = ['PLANNED', 'IN_PROGRESS', 'DELAYED', 'COMPLETED', 'CANCELLED'];
+const VALID_PRODUCTION_STATUSES: ProductionStatus[] = [
+  'PLANNED',
+  'IN_PROGRESS',
+  'DELAYED',
+  'COMPLETED',
+  'CANCELLED',
+];
 
 interface ToolDefinition {
   declaration: FunctionDeclaration;
@@ -302,7 +308,10 @@ export class AiToolsService {
         continue;
       }
       const action = t.permission.action ?? 'READ';
-      const ok = action === 'READ' ? grantedRead.has(t.permission.resource) : await this.policy.hasPermission(requester, t.permission.resource, action);
+      const ok =
+        action === 'READ'
+          ? grantedRead.has(t.permission.resource)
+          : await this.policy.hasPermission(requester, t.permission.resource, action);
       if (ok) allowed.push(t);
     }
 
@@ -731,12 +740,18 @@ export class AiToolsService {
   }
 
   /** confirm 단계에서 ProductionService.updateStatus()를 그대로 호출하므로 수동 상태변경과 동일한 검증/입고 로직을 탄다 */
-  private async draftProductionStatusUpdate(requester: AuthUser, sessionId: string, args: Record<string, unknown>) {
+  private async draftProductionStatusUpdate(
+    requester: AuthUser,
+    sessionId: string,
+    args: Record<string, unknown>,
+  ) {
     const orderNo = asString(args.orderNo);
     const status = asString(args.status) as ProductionStatus | '';
     if (!orderNo) return { error: '생산 오더 번호가 필요합니다.' };
     if (!status || !VALID_PRODUCTION_STATUSES.includes(status)) {
-      return { error: `상태값이 올바르지 않습니다. 다음 중 하나여야 합니다: ${VALID_PRODUCTION_STATUSES.join(', ')}` };
+      return {
+        error: `상태값이 올바르지 않습니다. 다음 중 하나여야 합니다: ${VALID_PRODUCTION_STATUSES.join(', ')}`,
+      };
     }
 
     // production.service.ts의 updateStatus()는 confirm 시점에 assertOwnerOrRole(managerId, ['ADMIN'])로
