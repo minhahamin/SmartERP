@@ -37,7 +37,8 @@ import { validateEnv } from './config/env.validation';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
-    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 100 }] }),
+    // 대시보드 한 화면이 API를 여러 번 호출하므로 전역 한도는 넉넉히 두고, 로그인 등은 컨트롤러에서 개별로 더 좁힌다
+    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 300 }] }),
     PrismaModule,
     CommonModule,
     HealthModule,
