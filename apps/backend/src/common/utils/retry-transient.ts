@@ -1,7 +1,7 @@
 const TRANSIENT_STATUS = new Set([429, 500, 502, 503, 504]);
 
 /** @google/genai의 ApiError는 status를 갖고, 없으면 메시지의 {"error":{"code":503}} JSON에서 읽는다 */
-function httpStatusOf(error: unknown): number | undefined {
+export function httpStatusOf(error: unknown): number | undefined {
   const status = (error as { status?: unknown })?.status;
   if (typeof status === 'number') return status;
   const message = error instanceof Error ? error.message : String(error);

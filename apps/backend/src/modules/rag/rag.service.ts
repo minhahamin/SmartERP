@@ -16,6 +16,7 @@ import { retryTransient } from '../../common/utils/retry-transient';
 export class RagService {
   private readonly logger = new Logger(RagService.name);
   private readonly gemini: GoogleGenAI | null;
+  private readonly model: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -23,6 +24,7 @@ export class RagService {
   ) {
     const apiKey = config.get<string>('GEMINI_API_KEY');
     this.gemini = apiKey ? new GoogleGenAI({ apiKey }) : null;
+    this.model = config.get<string>('GEMINI_MODEL') ?? 'gemini-2.5-flash';
   }
 
   /** 업로드/새 버전 등록 직후 호출자가 await 없이 fire-and-forget으로 호출한다 */
@@ -81,7 +83,7 @@ export class RagService {
     const truncated = text.slice(0, 12_000);
     const response = await retryTransient(() =>
       this.gemini!.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: this.model,
         contents:
           '당신은 사내 문서를 한국어로 요약하는 어시스턴트입니다. 핵심 내용을 3~5문장으로 간결하게 요약하세요.\n\n' +
           `문서 제목: ${title}\n\n내용:\n${truncated}`,

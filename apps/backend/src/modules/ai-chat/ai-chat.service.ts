@@ -16,19 +16,22 @@ import {
 import type { Prisma, ProductionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
+import { AppException } from '../../common/exceptions/app.exception';
+import { PolicyService } from '../../common/services/policy.service';
 import { LeaveService } from '../leave/leave.service';
 import { LEAVE_TYPE_LABEL } from '../leave/leave-constants';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { ProductionService } from '../production/production.service';
 import { createKoreanPdfDoc, pdfDocToBuffer } from '../../common/utils/korean-pdf';
-import { retryTransient } from '../../common/utils/retry-transient';
+import { httpStatusOf, retryTransient } from '../../common/utils/retry-transient';
 import { AiToolsService } from './ai-tools.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
 /** AI가 만든 초안은 "지금 답변 기준" 최신 정보로만 실행되어야 하므로, 오래된 제안은 재확인을 요구한다. */
 const ACTION_DRAFT_TTL_MS = 10 * 60 * 1000;
 
-const MODEL = 'gemini-2.5-flash';
+/** GEMINI_MODEL로 바꿀 수 있다 — 무료 등급은 gemini-2.5-flash가 하루 20회라, 데모/운영에서는 쿼터가 넉넉한 모델로 교체한다 */
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 const MAX_TOOL_TURNS = 4;
 const HISTORY_LIMIT = 10;
 /** FAQ 후보 생성 1회 실행당 분석할 최근 사용자 질문 개수 상한(비용 가드) */
@@ -38,6 +41,20 @@ const FAQ_ANALYSIS_LIMIT = 300;
 function writeField(doc: PDFKit.PDFDocument, label: string, value: string): void {
   doc.font('Pretendard-Bold').text(`${label}  `, { continued: true }).font('Pretendard').text(value);
   doc.moveDown(0.4);
+}
+
+/** 원인을 알 수 없는 일반 오류 대신, 사용자가 취할 행동(잠시 후 재시도)이 달라지는 경우만 구분해서 안내한다 */
+export function aiFailureMessage(error: unknown): string {
+  const status = httpStatusOf(error);
+  if (status === 429) {
+    // Gemini 쿼터 오류 본문에 어떤 한도인지(PerDay/PerMinute)가 들어 있다 — 일일 한도는 1분 뒤에도 풀리지 않는다
+    const detail = error instanceof Error ? error.message : String(error);
+    return /PerDay/i.test(detail)
+      ? '오늘 AI 사용 한도를 모두 사용했습니다. 내일 다시 시도하거나 관리자에게 문의해주세요.'
+      : 'AI 요청이 몰려 사용 한도를 초과했습니다. 약 1분 뒤에 다시 시도해주세요.';
+  }
+  if (status === 503) return 'AI 서비스가 일시적으로 혼잡합니다. 잠시 후 다시 시도해주세요.';
+  return 'AI 응답을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
 }
 
 const SYSTEM_PROMPT_LINES = [
@@ -51,6 +68,7 @@ const SYSTEM_PROMPT_LINES = [
   '5. 문서 검색 결과를 인용할 때는 문서 제목을 함께 언급한다.',
   '6. 도구 인자(예: 제품명, 직원명, 거래처명)는 반드시 사용자가 실제로 언급한 값만 사용한다. 사용자가 특정 이름을 언급하지 않았다면 그 인자를 비워두고 호출하거나(예: 이름 없이 본인 기준 조회), 이름을 지어내지 말고 "전체/목록" 성격의 도구(예: 안전재고 미달 전체 조회)를 사용한다.',
   '7. "내일", "다음 주 월요일", "이번 달" 같은 상대 날짜 표현은 아래 [현재 시각]을 기준으로 직접 계산해 YYYY-MM-DD로 변환해 도구 인자에 넣는다. 날짜를 사용자에게 되묻지 않는다.',
+  '8. 회사의 규정·지침·정책·절차·매뉴얼처럼 문서에 적힌 내용을 묻는 질문은 반드시 searchInternalDocuments로 검색해서 답한다. 질문과 관련 없는 다른 도구(재고·생산·매출 등)의 결과로 대신 답하지 않는다.',
 ];
 
 /** 상대 날짜 해석을 위해 매 요청마다 KST 기준 오늘 날짜/요일을 프롬프트에 붙인다 */
@@ -74,6 +92,7 @@ export function buildSystemPrompt(now: Date = new Date()): string {
 export class AiChatService {
   private readonly logger = new Logger(AiChatService.name);
   private readonly gemini: GoogleGenAI | null;
+  private readonly model: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -81,10 +100,12 @@ export class AiChatService {
     private readonly leaveService: LeaveService,
     private readonly announcementsService: AnnouncementsService,
     private readonly productionService: ProductionService,
+    private readonly policy: PolicyService,
     config: ConfigService,
   ) {
     const apiKey = config.get<string>('GEMINI_API_KEY');
     this.gemini = apiKey ? new GoogleGenAI({ apiKey }) : null;
+    this.model = config.get<string>('GEMINI_MODEL') ?? DEFAULT_MODEL;
   }
 
   listSessions(userId: string) {
@@ -215,13 +236,27 @@ export class AiChatService {
       ...questionCounts.map((q) => `- ${q.sample} | ${q.count}`),
     ].join('\n');
 
-    const response = await retryTransient(() =>
-      this.gemini!.models.generateContent({
-        model: MODEL,
-        contents: prompt,
-        config: { responseMimeType: 'application/json' },
-      }),
-    );
+    let response: Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>;
+    try {
+      response = await retryTransient(() =>
+        this.gemini!.models.generateContent({
+          model: this.model,
+          contents: prompt,
+          config: { responseMimeType: 'application/json' },
+        }),
+      );
+    } catch (error) {
+      // 한도 초과/일시 장애를 500(서버 버그)처럼 보이지 않게, 원인에 맞는 상태코드와 안내 문구로 돌려준다
+      this.logger.error(
+        'FAQ 클러스터링 Gemini 호출 실패',
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new AppException(
+        'AI_UNAVAILABLE',
+        aiFailureMessage(error),
+        httpStatusOf(error) === 429 ? 429 : 503,
+      );
+    }
 
     let clusters: {
       representativeQuestion: string;
@@ -307,7 +342,7 @@ export class AiChatService {
       while (turn < MAX_TOOL_TURNS) {
         const response = await retryTransient(() =>
           this.gemini!.models.generateContent({
-            model: MODEL,
+            model: this.model,
             contents,
             config: {
               systemInstruction: buildSystemPrompt(),
@@ -361,7 +396,7 @@ export class AiChatService {
         data: {
           sessionId,
           role: 'ASSISTANT',
-          content: 'AI 응답을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+          content: aiFailureMessage(error),
           tokenUsage: totalTokens,
         },
       });
@@ -384,6 +419,7 @@ export class AiChatService {
    */
   async confirmAction(draftId: string, requester: AuthUser) {
     const draft = await this.getOwnedPendingDraft(draftId, requester);
+    await this.assertCanConfirm(draft.actionType, requester);
 
     switch (draft.actionType) {
       case 'LEAVE_REQUEST': {
@@ -496,6 +532,18 @@ export class AiChatService {
     }
 
     return pdfDocToBuffer(doc);
+  }
+
+  /**
+   * 초안을 만든 시점이 아니라 "확정하는 시점"의 권한으로 다시 검사한다. 공지/생산 서비스의 권한 검사는
+   * 컨트롤러 가드에 있어서, 서비스를 직접 부르는 이 경로는 그 검사를 건너뛰기 때문이다.
+   * (초안 생성 후 10분 안에 권한이 회수되거나 역할이 바뀌어도 확정되지 않게 한다)
+   */
+  private async assertCanConfirm(actionType: string, requester: AuthUser): Promise<void> {
+    if (actionType === 'ANNOUNCEMENT') await this.policy.assertAccess(requester, 'ANNOUNCEMENT', 'CREATE');
+    if (actionType === 'PRODUCTION_STATUS_UPDATE')
+      await this.policy.assertAccess(requester, 'PRODUCTION', 'UPDATE');
+    // LEAVE_REQUEST는 본인 self-service라 별도 리소스 권한이 없다
   }
 
   private async getOwnedPendingDraft(draftId: string, requester: AuthUser) {
