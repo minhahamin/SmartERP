@@ -1,9 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { seedDefaultRoles } from '../../common/seed/default-roles';
 import { retryOnDuplicate } from '../../common/utils/retry-on-duplicate';
+import { MailService } from '../../common/services/mail.service';
 import { AuthTokenService } from './auth-token.service';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
@@ -33,7 +35,11 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokenService: AuthTokenService,
+    private readonly mail: MailService,
+    private readonly config: ConfigService,
   ) {}
+
+  private readonly logger = new Logger(AuthService.name);
 
   private findActiveUserByEmail(email: string, companyId?: string) {
     return this.prisma.user.findFirst({
@@ -187,37 +193,63 @@ export class AuthService {
 
   /**
    * 비밀번호 찾기 — 계정 열거 방지용으로 존재 여부와 무관하게 success만 반환한다.
-   * 재설정 토큰은 응답에 절대 포함하지 않고(ATO 방지) 운영에서는 이메일로 발송한다.
-   * 개발 환경에서는 서버 콘솔에 출력해 데모 흐름을 확인할 수 있게 한다.
+   * 재설정 토큰은 응답에 절대 포함하지 않고(ATO 방지) 재설정 링크를 이메일로만 전달한다.
+   * SMTP가 설정되지 않은 개발 환경에서는 MailService가 서버 로그에 링크를 출력한다.
    */
   async forgotPassword(email: string): Promise<{ success: true }> {
-    const user = await this.prisma.user.findFirst({ where: { email, status: 'ACTIVE' } });
+    // passwordHash는 전역 omit 대상이라 재설정 토큰 서명에 필요할 때만 명시적으로 조회한다
+    const user = await this.prisma.user.findFirst({
+      where: { email, status: 'ACTIVE' },
+      omit: { passwordHash: false },
+    });
     if (!user) return { success: true };
-    const resetToken = this.tokenService.signPasswordResetToken(user.id);
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(
-        `[auth] password reset token for ${email} (dev only, do not expose via API): ${resetToken}`,
+    const resetToken = this.tokenService.signPasswordResetToken(user.id, user.passwordHash);
+    const resetUrl = `${this.frontendBaseUrl()}/reset-password?token=${encodeURIComponent(resetToken)}`;
+    try {
+      await this.mail.send(
+        user.email,
+        '[ERPilot] 비밀번호 재설정 안내',
+        `${user.name}님, 아래 링크에서 비밀번호를 재설정하세요. 링크는 15분 동안만 유효합니다.\n\n${resetUrl}\n\n본인이 요청하지 않았다면 이 메일을 무시하세요.`,
       );
-    } else {
-      // TODO: 이메일 발송 연동 (resetToken을 메일로 전달)
-      void resetToken;
+    } catch (error) {
+      // 발송 실패 여부로 계정 존재를 추측할 수 없도록 항상 같은 응답을 반환한다
+      this.logger.error(
+        '비밀번호 재설정 메일 발송 실패',
+        error instanceof Error ? error.stack : String(error),
+      );
     }
     return { success: true };
   }
 
+  /** 재설정 링크의 베이스 URL — FRONTEND_URL이 없으면 CORS_ORIGIN의 첫 오리진을 쓴다 */
+  private frontendBaseUrl(): string {
+    const explicit = this.config.get<string>('FRONTEND_URL');
+    const fallback = this.config.get<string>('CORS_ORIGIN')?.split(',')[0]?.trim();
+    return (explicit ?? fallback ?? 'http://localhost:5173').replace(/\/+$/, '');
+  }
+
   async resetPassword(resetToken: string, newPassword: string): Promise<void> {
-    let userId: string;
+    const invalid = () => new UnauthorizedException('재설정 토큰이 유효하지 않거나 만료되었습니다.');
+    let claims: { userId: string; passwordFingerprint: string };
     try {
-      userId = this.tokenService.verifyPasswordResetToken(resetToken);
+      claims = this.tokenService.verifyPasswordResetToken(resetToken);
     } catch {
-      throw new UnauthorizedException('재설정 토큰이 유효하지 않거나 만료되었습니다.');
+      throw invalid();
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: claims.userId },
+      omit: { passwordHash: false },
+    });
+    // 비밀번호가 이미 바뀌었다면(= 이 링크를 이미 썼다면) 지문이 달라져 거부된다
+    if (!user || this.tokenService.passwordFingerprint(user.passwordHash) !== claims.passwordFingerprint) {
+      throw invalid();
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await this.prisma.user.update({
-      where: { id: userId },
+      where: { id: user.id },
       data: { passwordHash, mustChangePassword: false },
     });
-    await this.invalidateSessions(userId);
+    await this.invalidateSessions(user.id);
   }
 
   async getMe(authUser: AuthUser) {

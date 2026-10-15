@@ -19,6 +19,8 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/forgot-password', '/auth/reset-password'];
+
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
 /** 동시에 들어온 401들이 /auth/refresh를 중복 호출하지 않도록 진행 중인 재발급 Promise를 공유한다 */
@@ -40,7 +42,8 @@ apiClient.interceptors.response.use(
     }
 
     const config = error.config as RetriableConfig | undefined;
-    const isAuthEndpoint = config?.url?.includes('/auth/login') || config?.url?.includes('/auth/refresh');
+    // 로그인 전에 쓰는 공개 인증 API의 401은 "토큰 만료"가 아니라 입력/토큰 오류이므로 refresh를 시도하지 않는다
+    const isAuthEndpoint = PUBLIC_AUTH_PATHS.some((path) => config?.url?.includes(path));
     if (!config || config._retried || isAuthEndpoint) {
       useAuthStore.getState().clearSession();
       return Promise.reject(error);

@@ -43,21 +43,29 @@ export class AuthTokenService {
     return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   }
 
-  /** 비밀번호 재설정용 단기 JWT (15분, purpose=reset) — 초대/찾기 플로우용 */
-  signPasswordResetToken(userId: string): string {
+  /**
+   * 비밀번호 재설정용 단기 JWT (15분, purpose=password-reset).
+   * 현재 비밀번호 해시의 지문(pwd)을 함께 서명해, 비밀번호가 한 번 바뀌면 같은 링크는 즉시 무효가 된다(1회용).
+   */
+  signPasswordResetToken(userId: string, passwordHash: string): string {
     return this.jwtService.sign(
-      { sub: userId, purpose: 'password-reset' },
+      { sub: userId, purpose: 'password-reset', pwd: this.passwordFingerprint(passwordHash) },
       { secret: this.config.get<string>('JWT_ACCESS_SECRET'), expiresIn: '15m' as never },
     );
   }
 
-  verifyPasswordResetToken(token: string): string {
-    const payload = this.jwtService.verify<{ sub: string; purpose: string }>(token, {
+  verifyPasswordResetToken(token: string): { userId: string; passwordFingerprint: string } {
+    const payload = this.jwtService.verify<{ sub: string; purpose: string; pwd?: string }>(token, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET'),
     });
-    if (payload.purpose !== 'password-reset' || !payload.sub) {
+    if (payload.purpose !== 'password-reset' || !payload.sub || !payload.pwd) {
       throw new Error('invalid reset token');
     }
-    return payload.sub;
+    return { userId: payload.sub, passwordFingerprint: payload.pwd };
+  }
+
+  /** 해시 전체를 토큰에 싣지 않도록 SHA-256 앞 32자리만 사용한다 */
+  passwordFingerprint(passwordHash: string): string {
+    return createHash('sha256').update(passwordHash).digest('hex').slice(0, 32);
   }
 }

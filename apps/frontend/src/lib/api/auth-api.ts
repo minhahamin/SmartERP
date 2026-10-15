@@ -86,3 +86,11 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
   return { accessToken: data.data.accessToken, user: toAuthUser(data.data.user) };
 }
+
+export async function forgotPassword(email: string) {
+  await apiClient.post('/auth/forgot-password', { email });
+}
+
+export async function resetPassword(resetToken: string, newPassword: string) {
+  await apiClient.post('/auth/reset-password', { resetToken, newPassword });
+}

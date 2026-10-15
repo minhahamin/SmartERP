@@ -113,9 +113,9 @@ function LoginPage() {
             />
             로그인 유지
           </label>
-          <a href="#" className="font-medium text-primary hover:underline">
+          <Link to={ROUTES.forgotPassword} className="font-medium text-primary hover:underline">
             비밀번호 찾기
-          </a>
+          </Link>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
