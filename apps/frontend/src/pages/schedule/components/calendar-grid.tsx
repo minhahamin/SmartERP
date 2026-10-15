@@ -121,7 +121,9 @@ function CalendarGrid({ year, month, events, onEdit, onDelete }: CalendarGridPro
           <div
             key={weekIndex}
             className={cn('grid grid-cols-7', weekIndex > 0 && 'border-t border-border')}
-            style={{ gridTemplateRows: `auto repeat(${barRowCount}, auto) 1fr` }}
+            // 바가 없는 주는 barRowCount가 0인데, CSS repeat(0, …)은 무효 값이라 선언 전체가 버려진다.
+            // 그러면 배경 칸(gridRow: 1 / -1)이 날짜 숫자 줄만 덮어 세로선·회색 배경이 끊겨 보인다.
+            style={{ gridTemplateRows: `auto${' auto'.repeat(barRowCount)} 1fr` }}
           >
             {week.map((date, colIndex) => (
               <div
