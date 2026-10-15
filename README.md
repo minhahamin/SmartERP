@@ -2,6 +2,8 @@
 
 > Made by 홍민하
 
+[![CI](https://github.com/minhahamin/SmartERP/actions/workflows/ci.yml/badge.svg)](https://github.com/minhahamin/SmartERP/actions/workflows/ci.yml)
+
 **ERP + Copilot** — 기존 ERP 시스템과 AI 사내 업무 도우미를 결합한 B2B SaaS 플랫폼.
 
 ERP 데이터(직원/급여/재고/생산/거래처)를 관리하는 동시에, AI 챗봇을 통해 자연어로 ERP 데이터를 조회하고 사내 문서를 검색할 수 있다. 단순 CRUD 포트폴리오가 아니라, 실제 중소기업 도입을 가정한 **RBAC, 멀티테넌시, 동시성 처리, AI 권한 격리**까지 고려한 실무형 설계를 목표로 한다.
@@ -16,16 +18,29 @@ ERP 데이터(직원/급여/재고/생산/거래처)를 관리하는 동시에, 
 
 ## 스크린샷
 
-> 실제 캡처 이미지는 준비 중입니다. 아래는 캡처 예정 화면과 보여주려는 포인트입니다.
+### AI 어시스턴트 — 자연어 조회 (Function Calling → 실데이터 답변)
 
-| 화면 | 보여주려는 포인트 |
-|---|---|
-| 로그인 | 데모 계정 원클릭 로그인, 멀티테넌시(회사 단위) 로그인 구조 |
-| 대시보드 | 매출 추이, 안전재고 경고, 최근 공지 한눈에 |
-| AI 어시스턴트 — 조회 | 자연어 질문 → Function Calling → 실데이터 기반 답변 |
-| AI 어시스턴트 — 액션 제안 | "연차 신청해줘" → 확인 카드 → 사용자가 눌러야 최종 반영되는 human-in-the-loop UX |
-| FAQ 관리 | AI가 반복 질문을 분석해 만든 후보를 사람이 게시/반려하는 검수 큐 |
-| 생산/재고 관리 | 상태 전이(계획→진행→완료)와 안전재고 경고가 있는 실무형 화면 |
+![AI 조회](docs/screenshots/03-ai-query.png)
+
+### AI 어시스턴트 — 액션 제안 ("연차 신청해줘" → 확인 카드 → 사용자가 눌러야 반영)
+
+![AI 액션 제안](docs/screenshots/04-ai-action-draft.png)
+
+### 대시보드 — 매출 추이 · 안전재고 경고 · 최근 공지
+
+![대시보드](docs/screenshots/02-dashboard.png)
+
+### FAQ 관리 — AI가 반복 질문으로 만든 후보를 사람이 게시/반려하는 검수 큐
+
+![FAQ 검수 큐](docs/screenshots/05-faq-review.png)
+
+### 생산 관리 — 상태 전이(계획→진행→지연→완료) 칸반
+
+![생산 관리](docs/screenshots/06-production.png)
+
+### 로그인 — 데모 계정 원클릭 체험
+
+![로그인](docs/screenshots/01-login.png)
 
 ## 기술 스택
 
@@ -132,7 +147,9 @@ AI는 데이터를 직접 바꾸지 않고 **초안(Draft)만** 만든다. 화�
 ## 시작하기
 
 ```bash
-# 1) DB (PostgreSQL, pgvector extension 필요)
+# 1) DB (PostgreSQL + pgvector — 초기 마이그레이션이 CREATE EXTENSION vector를 실행하므로 필수)
+#    로컬에 없다면: docker run -d --name erpilot-db -p 5432:5432 \
+#      -e POSTGRES_USER=erpilot -e POSTGRES_PASSWORD=erpilot -e POSTGRES_DB=erpilot pgvector/pgvector:pg16
 cp apps/backend/.env.example apps/backend/.env   # DATABASE_URL, GEMINI_API_KEY 등 채우기
 
 # 2) Backend
@@ -147,6 +164,13 @@ npm run dev                  # http://localhost:3000/api/v1 (Swagger: /api/v1/do
 cd apps/frontend
 npm install
 npm run dev                  # http://localhost:5173
+```
+
+테스트 (DB 없이 실행되는 단위 테스트 — AI 도구 권한 격리, 제안→확인 패턴, 매출 집계 등):
+
+```bash
+cd apps/backend
+npm test
 ```
 
 데모 계정(로그인 화면에서 원클릭 채우기 지원, 비밀번호 기본 `erpilot1234!`):
