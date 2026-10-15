@@ -9,6 +9,10 @@ import { useAuthStore } from '@/stores/auth-store';
 
 const PIE_COLORS = ['#ec4899', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
 
+/** API는 매출을 원 단위로 내려준다 — 축 눈금은 백만 원 단위로 줄여 표시한다 */
+const formatMillion = (won: number) => `${Number((won / 1_000_000).toFixed(1))}백만`;
+const formatWon = (won: unknown) => `₩${Number(won).toLocaleString()}`;
+
 function StatisticsPage() {
   const role = useAuthStore((state) => state.user?.role);
 
@@ -55,8 +59,8 @@ function SalesStatsView() {
           <LineChart data={data.monthlyTrend}>
             <CartesianGrid vertical={false} stroke="#e2e8f0" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-            <YAxis tickLine={false} axisLine={false} width={48} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v: number) => `${v}백만`} />
-            <Tooltip formatter={(value) => [`₩${Number(value).toLocaleString()}백만`, '매출']} />
+            <YAxis tickLine={false} axisLine={false} width={48} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={formatMillion} />
+            <Tooltip formatter={(value) => [formatWon(value), '매출']} />
             <Line type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
@@ -65,9 +69,9 @@ function SalesStatsView() {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data.byPartner} layout="vertical" margin={{ left: 24 }}>
             <CartesianGrid horizontal={false} stroke="#e2e8f0" />
-            <XAxis type="number" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+            <XAxis type="number" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={formatMillion} />
             <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={80} tick={{ fontSize: 12, fill: '#64748b' }} />
-            <Tooltip formatter={(value) => [`₩${Number(value).toLocaleString()}천`, '매출']} />
+            <Tooltip formatter={(value) => [formatWon(value), '매출']} />
             <Bar dataKey="value" fill="#ec4899" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
