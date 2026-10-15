@@ -35,6 +35,7 @@ const SEARCH_TYPE_LABEL: Record<SearchResultType, string> = {
   announcement: '공지사항',
   production: '생산 오더',
   warehouse: '창고',
+  schedule: '일정',
 };
 
 function Header() {

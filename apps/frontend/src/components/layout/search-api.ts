@@ -1,6 +1,6 @@
 import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-export type SearchResultType = 'product' | 'partner' | 'employee' | 'document' | 'announcement' | 'production' | 'warehouse';
+export type SearchResultType = 'product' | 'partner' | 'employee' | 'document' | 'announcement' | 'production' | 'warehouse' | 'schedule';
 
 export interface SearchResultItem {
   type: SearchResultType;

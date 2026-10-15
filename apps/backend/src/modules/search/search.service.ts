@@ -3,7 +3,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
 export interface SearchResultItem {
-  type: 'product' | 'partner' | 'employee' | 'document' | 'announcement' | 'production' | 'warehouse';
+  type:
+    | 'product'
+    | 'partner'
+    | 'employee'
+    | 'document'
+    | 'announcement'
+    | 'production'
+    | 'warehouse'
+    | 'schedule';
   id: string;
   title: string;
   subtitle: string | null;
@@ -11,6 +19,9 @@ export interface SearchResultItem {
 }
 
 const LIMIT_PER_TYPE = 5;
+
+/** 일정 서비스(schedule.service.ts)와 같은 기준 — 이 역할은 모든 일정을 본다 */
+const SCHEDULE_FULL_ACCESS_ROLES = ['ADMIN', 'HR_MANAGER'];
 
 /**
  * 헤더 전체 검색. 리소스별 노출 여부는 AiToolsService와 동일하게 실제 RolePermission(READ)을
@@ -22,7 +33,11 @@ export class SearchService {
 
   async search(q: string, requester: AuthUser): Promise<SearchResultItem[]> {
     const granted = await this.grantedReadResources(requester.roleId);
-    const tasks: Promise<SearchResultItem[]>[] = [this.searchEmployees(q, requester)];
+    // 직원 연락처와 일정은 별도 리소스 권한 없이 모든 역할에 열려 있다(일정은 아래에서 공개 범위로 거른다)
+    const tasks: Promise<SearchResultItem[]>[] = [
+      this.searchEmployees(q, requester),
+      this.searchSchedules(q, requester),
+    ];
 
     if (granted.has('PRODUCT')) tasks.push(this.searchProducts(q, requester));
     if (granted.has('PARTNER')) tasks.push(this.searchPartners(q, requester));
@@ -105,6 +120,34 @@ export class SearchService {
       title: d.title,
       subtitle: d.category,
       path: '/documents',
+    }));
+  }
+
+  /** 일정 목록 API와 같은 공개 범위: 본인 일정 + 전사 공개 + 같은 부서 공개(관리자/인사는 전체) */
+  private async searchSchedules(q: string, requester: AuthUser): Promise<SearchResultItem[]> {
+    const items = await this.prisma.schedule.findMany({
+      where: {
+        companyId: requester.companyId,
+        title: { contains: q, mode: 'insensitive' },
+        ...(SCHEDULE_FULL_ACCESS_ROLES.includes(requester.roleName)
+          ? {}
+          : {
+              OR: [
+                { ownerId: requester.sub },
+                { visibility: 'COMPANY' as const },
+                { visibility: 'DEPARTMENT' as const, departmentId: requester.departmentId },
+              ],
+            }),
+      },
+      orderBy: { startAt: 'desc' },
+      take: LIMIT_PER_TYPE,
+    });
+    return items.map((s) => ({
+      type: 'schedule',
+      id: s.id,
+      title: s.title,
+      subtitle: s.startAt.toISOString().slice(0, 10),
+      path: '/schedule',
     }));
   }
 
