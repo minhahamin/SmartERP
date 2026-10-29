@@ -34,7 +34,9 @@ export function useGenerateFaqCandidates() {
             ? `새 FAQ 후보 ${result.candidatesCreated}건을 찾았습니다.${skipped}`
             : result.skippedNoEvidence > 0
               ? `반복 질문 ${result.skippedNoEvidence}건을 찾았지만 답변할 근거(문서)가 없어 후보로 만들지 않았습니다.`
-              : `분석 완료 — 임계치를 넘는 반복 질문이 없었습니다. (분석한 질문 ${result.distinctQuestions}종)`,
+              : result.skippedDataLookup > 0
+                ? `반복 질문 ${result.skippedDataLookup}건은 현재 데이터를 조회하는 질문이라 FAQ 대신 챗봇이 실시간으로 답합니다.`
+                : `분석 완료 — 임계치를 넘는 반복 질문이 없었습니다. (분석한 질문 ${result.distinctQuestions}종)`,
         variant: result.candidatesCreated > 0 ? 'success' : 'default',
       });
     },

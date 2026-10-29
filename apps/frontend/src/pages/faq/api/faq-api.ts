@@ -28,6 +28,8 @@ export interface GenerateFaqResult {
   candidatesCreated: number;
   /** 근거(문서·화면 안내)를 찾지 못해 답변을 쓰지 않고 건너뛴 후보 수 */
   skippedNoEvidence: number;
+  /** 현재 데이터를 조회하는 질문이라 FAQ 대상에서 제외한 수(챗봇이 도구로 실시간 답한다) */
+  skippedDataLookup: number;
   candidates: { id: string; question: string }[];
 }
 
