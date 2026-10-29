@@ -1,5 +1,10 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useState } from 'react';
+import { FileDown } from 'lucide-react';
 import { PageHeader } from '@/components/common/page-header';
+import { Button } from '@/components/ui/button';
+import { downloadMonthlyReport } from '@/pages/statistics/api/statistics-api';
+import { toast } from '@/stores/toast-store';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
@@ -13,12 +18,46 @@ const PIE_COLORS = ['#ec4899', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
 const formatMillion = (won: number) => `${Number((won / 1_000_000).toFixed(1))}백만`;
 const formatWon = (won: unknown) => `₩${Number(won).toLocaleString()}`;
 
+/** 지난달(KST) 연·월. 리포트는 마감된 달 기준으로 받는 것이 자연스럽다 */
+function lastMonth(): { year: number; month: number } {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const month = kst.getUTCMonth(); // 0-based 이번 달 == 1-based 지난달
+  return month === 0 ? { year: kst.getUTCFullYear() - 1, month: 12 } : { year: kst.getUTCFullYear(), month };
+}
+
+function MonthlyReportButton() {
+  const [loading, setLoading] = useState(false);
+  const { year, month } = lastMonth();
+
+  async function download() {
+    setLoading(true);
+    try {
+      await downloadMonthlyReport(year, month);
+    } catch {
+      toast({ title: '리포트를 내려받지 못했습니다. 잠시 후 다시 시도해주세요.', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Button variant="secondary" onClick={download} disabled={loading}>
+      <FileDown className="size-4" />
+      {loading ? '만드는 중…' : `${year}년 ${month}월 리포트 PDF`}
+    </Button>
+  );
+}
+
 function StatisticsPage() {
   const role = useAuthStore((state) => state.user?.role);
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="통계 분석" description="매출/재고/인사 데이터를 시각화하고 기간별로 비교합니다." />
+      <PageHeader
+        title="통계 분석"
+        description="매출/재고/인사 데이터를 시각화하고 기간별로 비교합니다."
+        actions={role === 'ADMIN' ? <MonthlyReportButton /> : undefined}
+      />
 
       {role === 'EMPLOYEE' ? (
         <EmployeeStatsView />
