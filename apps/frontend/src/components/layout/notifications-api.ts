@@ -1,6 +1,7 @@
 import { apiClient, type ApiSuccess } from '@/lib/api/client';
 
-export type NotificationType = 'INVENTORY' | 'PRODUCTION' | 'LEAVE' | 'PAYROLL' | 'SCHEDULE';
+/** 서버가 자동화 작업에서 새 유형을 추가할 수 있으므로 알려진 값 외의 문자열도 허용한다 */
+export type NotificationType = 'INVENTORY' | 'PRODUCTION' | 'LEAVE' | 'PAYROLL' | 'SCHEDULE' | (string & {});
 
 export interface AppNotification {
   id: string;

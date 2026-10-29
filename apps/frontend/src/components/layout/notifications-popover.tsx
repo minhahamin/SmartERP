@@ -1,27 +1,55 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Bell, CalendarClock, CalendarDays, Factory, Wallet } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bell,
+  CalendarClock,
+  CalendarDays,
+  ClipboardList,
+  Factory,
+  FileText,
+  MessagesSquare,
+  TrendingDown,
+  UserX,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotifications } from '@/components/layout/use-notifications';
-import type { AppNotification, NotificationType } from '@/components/layout/notifications-api';
+import type { AppNotification } from '@/components/layout/notifications-api';
 
-const TYPE_ICON: Record<NotificationType, typeof Bell> = {
-  INVENTORY: AlertTriangle,
-  PRODUCTION: Factory,
-  LEAVE: CalendarClock,
-  PAYROLL: Wallet,
-  SCHEDULE: CalendarDays,
+const RED = 'bg-red-100 text-red-600';
+const WARNING = 'bg-warning-soft text-warning-foreground';
+const INFO = 'bg-info-soft text-info-foreground';
+const PRIMARY = 'bg-primary-soft text-primary-soft-foreground';
+const NEUTRAL = 'bg-gray-100 text-gray-600';
+
+/**
+ * 알림 유형별 아이콘·색. 서버(자동화 작업 등)가 새 유형을 추가해도 화면이 깨지지 않도록, 표에 없는 유형은
+ * 기본 아이콘으로 보여준다 — 예전에는 표에서 못 찾으면 undefined 컴포넌트를 렌더링해 앱 전체가 멈췄다.
+ */
+const TYPE_STYLE: Record<string, { icon: LucideIcon; className: string }> = {
+  INVENTORY: { icon: AlertTriangle, className: RED },
+  PRODUCTION: { icon: Factory, className: RED },
+  PRODUCTION_DELAY: { icon: Factory, className: RED },
+  LEAVE: { icon: CalendarClock, className: WARNING },
+  LEAVE_REQUESTED: { icon: CalendarClock, className: WARNING },
+  LEAVE_APPROVED: { icon: CalendarClock, className: INFO },
+  LEAVE_REJECTED: { icon: CalendarClock, className: RED },
+  PAYROLL: { icon: Wallet, className: INFO },
+  SCHEDULE: { icon: CalendarDays, className: PRIMARY },
+  PURCHASE_DRAFT: { icon: ClipboardList, className: INFO },
+  ATTENDANCE_ANOMALY: { icon: UserX, className: WARNING },
+  SALES_DROP: { icon: TrendingDown, className: RED },
+  MONTHLY_REPORT: { icon: FileText, className: PRIMARY },
+  FAQ_CANDIDATES: { icon: MessagesSquare, className: PRIMARY },
 };
 
-const TYPE_ICON_CLASS: Record<NotificationType, string> = {
-  INVENTORY: 'bg-red-100 text-red-600',
-  PRODUCTION: 'bg-red-100 text-red-600',
-  LEAVE: 'bg-warning-soft text-warning-foreground',
-  PAYROLL: 'bg-info-soft text-info-foreground',
-  SCHEDULE: 'bg-primary-soft text-primary-soft-foreground',
-};
+function styleOf(type: string): { icon: LucideIcon; className: string } {
+  return TYPE_STYLE[type] ?? { icon: Bell, className: NEUTRAL };
+}
 
 function formatRelativeDate(iso: string) {
   const now = new Date();
@@ -82,7 +110,7 @@ function NotificationsPopover() {
             <p className="px-3 py-8 text-center text-xs text-muted-foreground">알림이 없습니다.</p>
           ) : (
             list.map((notification) => {
-              const Icon = TYPE_ICON[notification.type];
+              const { icon: Icon, className: iconClass } = styleOf(notification.type);
               return (
                 <button
                   key={notification.id}
@@ -93,7 +121,7 @@ function NotificationsPopover() {
                     !notification.isRead && 'bg-primary-soft/30',
                   )}
                 >
-                  <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full', TYPE_ICON_CLASS[notification.type])}>
+                  <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full', iconClass)}>
                     <Icon className="size-3.5" />
                   </span>
                   <span className="flex-1">
