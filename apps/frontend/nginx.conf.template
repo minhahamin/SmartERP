@@ -8,15 +8,25 @@ server {
     gzip on;
     gzip_types text/css application/javascript application/json image/svg+xml;
 
+    # 기본 보안 헤더 — 브라우저가 응답 형식을 추측해 실행하는 것(nosniff), 다른 사이트가 이 앱을
+    # iframe에 넣는 것(SAMEORIGIN), 주소가 외부로 새는 것(Referrer-Policy)을 막는다.
+    # nginx는 location 안에 add_header가 하나라도 있으면 서버 레벨 선언을 상속하지 않으므로 location마다 둔다.
+    # CSP는 외부 폰트/CDN·API 주소에 맞춰 Railway에서 검증한 뒤 추가한다(잘못 넣으면 화면이 깨진다).
     # React Router(SPA) — 알 수 없는 경로는 전부 index.html로 위임
     location / {
         try_files $uri /index.html;
         add_header Cache-Control "no-cache";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
 
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
 
     # 동일 오리진 /api/v1 폴백 — VITE_API_BASE_URL 미주입 시에도 JSON 대신 index.html 반환 방지.
