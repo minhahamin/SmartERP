@@ -24,6 +24,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { AutomationModule } from './modules/automation/automation.module';
 import { ProductionModule } from './modules/production/production.module';
 import { DocumentsModule } from './modules/documents/documents.module';
@@ -58,6 +59,7 @@ import { validateEnv } from './config/env.validation';
     InventoryModule,
     StockMovementsModule,
     PurchaseOrdersModule,
+    ReportsModule,
     AutomationModule,
     ProductionModule,
     DocumentsModule,

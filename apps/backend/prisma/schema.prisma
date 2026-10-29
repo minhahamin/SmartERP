@@ -41,6 +41,7 @@ model Company {
   schedules        Schedule[]
   faqItems         FaqItem[]
   auditLogs        AuditLog[]
+  monthlyReports   MonthlyReport[]
 
   @@map("companies")
 }
@@ -577,6 +578,25 @@ enum PurchaseOrderStatus {
   CONFIRMED
   RECEIVED
   CANCELLED
+}
+
+/// 월간 경영 리포트. 집계 수치(data)와 요약문을 한 번 만들어 저장해 두고, PDF는 이 값으로 매번 다시 그린다 —
+/// 내려받을 때마다 AI를 호출하지 않도록 하기 위함이다.
+model MonthlyReport {
+  id            String   @id @default(uuid())
+  companyId     String
+  year          Int
+  month         Int
+  data          Json
+  summary       String
+  /// 'AI'(Gemini 요약) 또는 'TEMPLATE'(키가 없거나 호출 실패 시 수치로 만든 고정 문장)
+  summarySource String
+  createdAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, year, month])
+  @@map("monthly_reports")
 }
 
 // ── Knowledge / RAG ───────────────────────────────────────

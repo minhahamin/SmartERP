@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
+import { ReportsService } from '../reports/reports.service';
 import { ProductionDelayNotifier } from './production-delay.notifier';
 
 const KST = 'Asia/Seoul';
@@ -21,6 +22,7 @@ export class AutomationScheduler {
     private readonly prisma: PrismaService,
     private readonly purchaseOrders: PurchaseOrdersService,
     private readonly productionDelay: ProductionDelayNotifier,
+    private readonly reports: ReportsService,
     config: ConfigService,
   ) {
     this.enabled = config.get<string>('AUTOMATION_ENABLED') !== 'false';
@@ -38,6 +40,12 @@ export class AutomationScheduler {
   @Cron('0 0 9 * * *', { timeZone: KST })
   async notifyProductionDelays() {
     await this.forEachCompany('생산 지연 알림', (companyId) => this.productionDelay.notifyForCompany(companyId));
+  }
+
+  /** 매월 1일에 지난달 경영 리포트를 만들어 두고 관리자에게 알린다(AI 호출은 회사당 월 1회) */
+  @Cron('0 30 9 1 * *', { timeZone: KST })
+  async generateMonthlyReport() {
+    await this.forEachCompany('월간 리포트 생성', (companyId) => this.reports.generateLastMonthForCompany(companyId));
   }
 
   private async forEachCompany(label: string, job: (companyId: string) => Promise<unknown>) {
