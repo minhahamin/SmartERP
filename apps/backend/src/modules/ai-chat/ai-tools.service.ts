@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { FunctionDeclaration } from '@google/genai';
 import type { LeaveType, PermissionAction, ProductionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -6,6 +6,8 @@ import { PolicyService } from '../../common/services/policy.service';
 import { LeaveService } from '../leave/leave.service';
 import { LEAVE_TYPE_LABEL } from '../leave/leave-constants';
 import { RagService } from '../rag/rag.service';
+import { ScheduleService } from '../schedule/schedule.service';
+import { StatisticsService } from '../statistics/statistics.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
 const VALID_PRODUCTION_STATUSES: ProductionStatus[] = [
@@ -49,6 +51,27 @@ function asString(value: unknown): string {
 }
 
 const DOCUMENT_SEARCH_TOOL = 'searchInternalDocuments';
+const STATISTICS_TOPICS = ['dashboard', 'sales', 'inventory', 'hr', 'me'] as const;
+type StatisticsTopic = (typeof STATISTICS_TOPICS)[number];
+const DEFAULT_SCHEDULE_RANGE_DAYS = 7;
+const SCHEDULE_RESULT_LIMIT = 20;
+const FAQ_RESULT_LIMIT = 8;
+
+/** KST 기준 YYYY-MM-DD (서버 시간대와 무관하게 사용자가 말하는 "오늘"에 맞춘다) */
+function kstDateString(date: Date): string {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function addDays(dateString: string, days: number): string {
+  const date = new Date(`${dateString}T00:00:00+09:00`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return kstDateString(date);
+}
+
+/** KST 'YYYY-MM-DD HH:mm' */
+function kstDateTimeString(date: Date): string {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 16).replace('T', ' ');
+}
 const VALID_LEAVE_TYPES = Object.keys(LEAVE_TYPE_LABEL) as LeaveType[];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -64,6 +87,8 @@ export class AiToolsService {
     private readonly leaveService: LeaveService,
     private readonly policy: PolicyService,
     private readonly rag: RagService,
+    private readonly scheduleService: ScheduleService,
+    private readonly statisticsService: StatisticsService,
   ) {}
 
   private readonly tools: ToolDefinition[] = [
@@ -211,6 +236,51 @@ export class AiToolsService {
         name: 'getAnnouncements',
         description: '요청자가 볼 수 있는 최신 공지사항을 조회한다.',
         parametersJsonSchema: { type: 'object', properties: {}, required: [] },
+      },
+    },
+    {
+      permission: { resource: 'SCHEDULE' },
+      keywords: ['일정', '스케줄', '회의', '미팅', '약속', '출장', '행사'],
+      declaration: {
+        name: 'getSchedules',
+        description:
+          '요청자가 볼 수 있는 일정(회의/출장/행사 등)을 기간으로 조회한다. 기간을 말하지 않으면 오늘부터 7일간을 조회한다.',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: {
+            startDate: { type: 'string', description: '조회 시작일 YYYY-MM-DD' },
+            endDate: { type: 'string', description: '조회 종료일 YYYY-MM-DD. 하루만 보려면 시작일과 같게 한다.' },
+          },
+          required: [],
+        },
+      },
+    },
+    {
+      permission: { resource: 'STATISTICS' },
+      keywords: ['통계', '추이', '대시보드', '분석', 'KPI', '지표', '인원 현황', '부서별', '역할별', '창고별', '월별'],
+      declaration: {
+        name: 'getStatistics',
+        description:
+          '통계 분석 화면의 집계를 조회한다. topic: dashboard(역할별 핵심 지표와 매출 추이), sales(월별 매출 추이·거래처별 Top5), inventory(창고별·분류별 재고), hr(부서별·역할별 인원), me(내 근태·연차). 역할에 따라 볼 수 없는 주제는 권한 오류가 반환된다.',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: { topic: { type: 'string', enum: [...STATISTICS_TOPICS] } },
+          required: [],
+        },
+      },
+    },
+    {
+      // 게시된 FAQ는 로그인한 전 직원이 볼 수 있다(GET /ai/faq에도 별도 권한이 없다)
+      permission: null,
+      keywords: ['FAQ', 'faq', '자주 묻는', '자주묻는', '자주 하는', '자주하는'],
+      declaration: {
+        name: 'searchFaq',
+        description: '게시된 FAQ(자주 묻는 질문과 답변)를 질문·답변·분류 키워드로 검색한다.',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: { query: { type: 'string', description: '검색어(예: 연차, 비밀번호)' } },
+          required: [],
+        },
       },
     },
     {
@@ -413,6 +483,12 @@ export class AiToolsService {
         return this.getAnnouncements(requester);
       case 'searchInternalDocuments':
         return this.searchInternalDocuments(requester, asString(args.query));
+      case 'getSchedules':
+        return this.getSchedules(requester, asString(args.startDate), asString(args.endDate));
+      case 'getStatistics':
+        return this.getStatistics(requester, asString(args.topic));
+      case 'searchFaq':
+        return this.searchFaq(requester, asString(args.query));
       case 'draftLeaveRequest':
         return this.draftLeaveRequest(requester, sessionId, args);
       case 'draftAnnouncement':
@@ -681,6 +757,102 @@ export class AiToolsService {
         publishedAt: a.publishedAt.toISOString().slice(0, 10),
         isPinned: a.isPinned,
       })),
+    };
+  }
+
+  /** ScheduleService.findAll을 그대로 쓴다 — ADMIN/HR 전체, 그 외 본인·전사·소속 부서 공개 일정이라는 화면과 같은 규칙이 적용된다 */
+  private async getSchedules(requester: AuthUser, startDate: string, endDate: string) {
+    const today = kstDateString(new Date());
+    const from = DATE_PATTERN.test(startDate) ? startDate : today;
+    const to = DATE_PATTERN.test(endDate)
+      ? endDate
+      : DATE_PATTERN.test(startDate)
+        ? startDate
+        : addDays(from, DEFAULT_SCHEDULE_RANGE_DAYS);
+
+    const schedules = await this.scheduleService.findAll(
+      { from: `${from}T00:00:00+09:00`, to: `${to}T23:59:59+09:00` },
+      requester,
+    );
+    if (schedules.length === 0) return { found: false, message: `${from} ~ ${to} 기간에 일정이 없습니다.` };
+    return {
+      found: true,
+      period: `${from} ~ ${to}`,
+      total: schedules.length,
+      items: schedules.slice(0, SCHEDULE_RESULT_LIMIT).map((s) => ({
+        title: s.title,
+        type: s.type,
+        start: s.allDay ? kstDateString(s.startAt) : kstDateTimeString(s.startAt),
+        end: s.allDay ? kstDateString(s.endAt) : kstDateTimeString(s.endAt),
+        allDay: s.allDay,
+        location: s.location,
+      })),
+    };
+  }
+
+  /** StatisticsService의 역할별 접근 검사를 그대로 탄다 — 권한 밖 주제는 Forbidden을 권한 오류로 돌려준다 */
+  private async getStatistics(requester: AuthUser, topicArg: string) {
+    const topic = (topicArg || 'dashboard') as StatisticsTopic;
+    if (!STATISTICS_TOPICS.includes(topic)) {
+      return { error: `topic이 올바르지 않습니다. 다음 중 하나여야 합니다: ${STATISTICS_TOPICS.join(', ')}` };
+    }
+
+    try {
+      switch (topic) {
+        case 'sales':
+          return { topic, ...(await this.statisticsService.getSalesCharts(requester)) };
+        case 'inventory':
+          return { topic, ...(await this.statisticsService.getInventoryCharts(requester)) };
+        case 'hr':
+          return { topic, ...(await this.statisticsService.getHrCharts(requester)) };
+        case 'me':
+          return { topic, ...(await this.statisticsService.getMyCharts(requester)) };
+        default: {
+          const dashboard = await this.statisticsService.getDashboard(requester);
+          return { topic, kpis: dashboard.kpis, salesTrend: dashboard.salesTrend };
+        }
+      }
+    } catch (error) {
+      if (error instanceof ForbiddenException) return { error: error.message };
+      throw error;
+    }
+  }
+
+  /**
+   * 게시된 FAQ를 키워드로 고른다. 일치가 없으면 조회수 높은 FAQ를 대신 주되 matchedByKeyword=false로 표시해,
+   * 모델이 의미로 맞는 항목이 있는지 판단하고 없으면 없다고 답하게 한다(FAQ는 수십 건 규모라 가능한 방식).
+   */
+  private async searchFaq(requester: AuthUser, query: string) {
+    const published = await this.prisma.faqItem.findMany({
+      where: { companyId: requester.companyId, isPublished: true },
+      orderBy: { hitCount: 'desc' },
+      take: 50,
+    });
+    if (published.length === 0) return { found: false, message: '게시된 FAQ가 없습니다.' };
+
+    const terms = searchTerms(query);
+    const score = (f: { question: string; answer: string; category: string | null }) =>
+      terms.reduce(
+        (sum, term) =>
+          sum +
+          (f.question.toLowerCase().includes(term) ? 2 : 0) +
+          (f.answer.toLowerCase().includes(term) ? 1 : 0) +
+          (f.category?.toLowerCase().includes(term) ? 1 : 0),
+        0,
+      );
+    const ranked = published
+      .map((f) => ({ f, score: score(f) }))
+      .filter((r) => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((r) => r.f);
+
+    const matchedByKeyword = ranked.length > 0;
+    return {
+      found: true,
+      matchedByKeyword,
+      items: (matchedByKeyword ? ranked : published)
+        .slice(0, FAQ_RESULT_LIMIT)
+        .map((f) => ({ question: f.question, answer: f.answer, category: f.category })),
     };
   }
 

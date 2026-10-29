@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { AiToolsService, searchTerms } from './ai-tools.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
@@ -36,8 +37,23 @@ function build(grantedReadResources: string[], hasPermission = false) {
   const leaveService = { create: jest.fn() };
   const policy = { hasPermission: jest.fn().mockResolvedValue(hasPermission) };
   const rag = { search: jest.fn().mockResolvedValue(null) };
-  const service = new AiToolsService(prisma as never, leaveService as never, policy as never, rag as never);
-  return { service, prisma, leaveService, policy, rag };
+  const scheduleService = { findAll: jest.fn().mockResolvedValue([]) };
+  const statisticsService = {
+    getSalesCharts: jest.fn(),
+    getInventoryCharts: jest.fn(),
+    getHrCharts: jest.fn(),
+    getMyCharts: jest.fn(),
+    getDashboard: jest.fn(),
+  };
+  const service = new AiToolsService(
+    prisma as never,
+    leaveService as never,
+    policy as never,
+    rag as never,
+    scheduleService as never,
+    statisticsService as never,
+  );
+  return { service, prisma, leaveService, policy, rag, scheduleService, statisticsService };
 }
 
 const names = (declarations: { name?: string }[]) => declarations.map((d) => d.name);
@@ -225,5 +241,96 @@ describe('문서 검색', () => {
       .calls[0][0] as { where: { companyId: string; indexStatus: string } };
     // 회사 스코프와 색인 완료 문서만 검색한다
     expect(where.where).toMatchObject({ companyId: 'company-1', indexStatus: 'DONE' });
+  });
+});
+
+describe('AiToolsService — 일정/통계/FAQ 도구', () => {
+  it('일정 도구는 SCHEDULE READ 권한이 있을 때만 노출된다', async () => {
+    const denied = build(['ANNOUNCEMENT']);
+    expect(names(await denied.service.getDeclarations(authUser(), '이번 주 일정 알려줘'))).not.toContain('getSchedules');
+
+    const allowed = build(['SCHEDULE']);
+    expect(names(await allowed.service.getDeclarations(authUser(), '이번 주 일정 알려줘'))).toContain('getSchedules');
+  });
+
+  it('일정은 ScheduleService.findAll(요청자 기준)을 KST 기간으로 호출하고, 날짜 하나만 주면 그날만 본다', async () => {
+    const { service, scheduleService } = build(['SCHEDULE']);
+    scheduleService.findAll.mockResolvedValue([
+      {
+        title: '주간 회의',
+        type: 'MEETING',
+        startAt: new Date('2026-11-02T00:00:00Z'),
+        endAt: new Date('2026-11-02T01:00:00Z'),
+        allDay: false,
+        location: '3층',
+      },
+    ]);
+    const requester = authUser();
+    const result = (await service.execute('getSchedules', { startDate: '2026-11-02' }, requester, 's')) as {
+      found: boolean;
+      items: { title: string; start: string }[];
+    };
+
+    expect(scheduleService.findAll).toHaveBeenCalledWith(
+      { from: '2026-11-02T00:00:00+09:00', to: '2026-11-02T23:59:59+09:00' },
+      requester,
+    );
+    expect(result.items[0]).toMatchObject({ title: '주간 회의', start: '2026-11-02 09:00' });
+  });
+
+  it('일정이 없으면 없다고 돌려준다', async () => {
+    const { service } = build(['SCHEDULE']);
+    const result = (await service.execute('getSchedules', {}, authUser(), 's')) as { found: boolean };
+    expect(result.found).toBe(false);
+  });
+
+  it('통계는 주제별 서비스 메서드를 호출하고 역할 제한(Forbidden)은 권한 오류로 돌려준다', async () => {
+    const { service, statisticsService } = build(['STATISTICS']);
+    statisticsService.getHrCharts.mockRejectedValue(
+      new ForbiddenException('인사 통계는 관리자/인사 담당자만 조회할 수 있습니다.'),
+    );
+    const denied = (await service.execute('getStatistics', { topic: 'hr' }, authUser(), 's')) as { error: string };
+    expect(denied.error).toContain('인사 담당자만');
+
+    statisticsService.getSalesCharts.mockResolvedValue({ monthlyTrend: [{ label: '10월', value: 100 }], byPartner: [] });
+    const ok = (await service.execute('getStatistics', { topic: 'sales' }, authUser(), 's')) as {
+      topic: string;
+      monthlyTrend: unknown[];
+    };
+    expect(ok.topic).toBe('sales');
+    expect(ok.monthlyTrend).toHaveLength(1);
+  });
+
+  it('통계 topic이 올바르지 않으면 오류를 돌려준다', async () => {
+    const { service } = build(['STATISTICS']);
+    const result = (await service.execute('getStatistics', { topic: 'weather' }, authUser(), 's')) as {
+      error: string;
+    };
+    expect(result.error).toContain('topic');
+  });
+
+  it('FAQ는 키워드로 고르고, 일치가 없으면 인기 FAQ를 matchedByKeyword=false로 준다', async () => {
+    const { service, prisma } = build([]);
+    (prisma as unknown as { faqItem: { findMany: jest.Mock } }).faqItem = {
+      findMany: jest.fn().mockResolvedValue([
+        { question: '반차는 연차에서 차감되나요?', answer: '네 0.5일 차감됩니다.', category: '휴가' },
+        { question: '비밀번호를 잊었어요', answer: '로그인 화면에서 재설정하세요.', category: '계정' },
+      ]),
+    };
+
+    const hit = (await service.execute('searchFaq', { query: '비밀번호' }, authUser(), 's')) as {
+      matchedByKeyword: boolean;
+      items: { question: string }[];
+    };
+    expect(hit.matchedByKeyword).toBe(true);
+    expect(hit.items).toHaveLength(1);
+    expect(hit.items[0].question).toBe('비밀번호를 잊었어요');
+
+    const miss = (await service.execute('searchFaq', { query: '주차장' }, authUser(), 's')) as {
+      matchedByKeyword: boolean;
+      items: unknown[];
+    };
+    expect(miss.matchedByKeyword).toBe(false);
+    expect(miss.items).toHaveLength(2);
   });
 });
