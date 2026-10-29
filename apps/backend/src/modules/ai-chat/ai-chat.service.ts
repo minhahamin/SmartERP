@@ -24,7 +24,18 @@ import { AnnouncementsService } from '../announcements/announcements.service';
 import { ProductionService } from '../production/production.service';
 import { createKoreanPdfDoc, pdfDocToBuffer } from '../../common/utils/korean-pdf';
 import { httpStatusOf, retryTransient } from '../../common/utils/retry-transient';
+import { RagService } from '../rag/rag.service';
 import { AiMemoryService } from './ai-memory.service';
+import {
+  FAQ_EVIDENCE_DOCUMENTS,
+  FAQ_MAX_CANDIDATES,
+  buildAnswerPrompt,
+  buildClusterPrompt,
+  parseAnswers,
+  parseClusters,
+  type FaqAnswerRequest,
+  type FaqCluster,
+} from './faq-generation';
 import { AiToolsService } from './ai-tools.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
@@ -115,6 +126,7 @@ export class AiChatService {
     private readonly productionService: ProductionService,
     private readonly policy: PolicyService,
     private readonly memory: AiMemoryService,
+    private readonly rag: RagService,
     config: ConfigService,
   ) {
     const apiKey = config.get<string>('GEMINI_API_KEY');
@@ -213,12 +225,11 @@ export class AiChatService {
   }
 
   /**
-   * docs/09-ai-chatbot-design.md 9.1 "비동기: FAQ 후보 클러스터링 큐 적재"를 별도 큐/임베딩 인프라 없이
-   * Gemini 한 번 호출로 구현한다(이 프로젝트 전반의 방침 — RAG도 pgvector 대신 키워드 매칭으로 단순화했듯,
-   * "의도 클러스터링"도 전용 ML 파이프라인 대신 LLM에 위임한다). 문자 그대로 반복된 질문은 서버에서 먼저
-   * 집계하고, 표현이 달라도 의도가 같은 질문을 묶는 것만 모델에 맡긴 뒤, threshold 재검증·중복 방지는
-   * 서버가 맡는다(모델 출력을 그대로 신뢰하지 않는다는 이 프로젝트의 일관된 원칙, ai-tools.service.ts 참고).
-   * 실행은 사람이 관리 화면/API로 트리거하는 온디맨드 방식이다(별도 큐/스케줄러 인프라가 없음).
+   * docs/09-ai-chatbot-design.md 9.1 "비동기: FAQ 후보 클러스터링 큐 적재"를 별도 큐 없이 Gemini 호출로 구현한다.
+   * 문자 그대로 반복된 질문은 서버에서 먼저 집계하고, 표현이 달라도 의도가 같은 질문을 묶는 것만 모델에 맡긴 뒤,
+   * threshold 재검증·중복 방지는 서버가 맡는다(모델 출력을 그대로 신뢰하지 않는다는 이 프로젝트의 일관된 원칙).
+   * 답변은 대표 질문마다 공개 문서의 관련 본문(RAG)과 화면 안내를 근거로 쓰고, 근거가 없으면 후보에서 제외한다.
+   * 실행은 사람이 관리 화면/API로 트리거하거나 스케줄러가 주 1회 돌리며, 게시는 항상 사람이 검수한다.
    */
   generateFaqCandidates(requester: AuthUser, threshold = 5) {
     return this.generateFaqCandidatesForCompany(requester.companyId, threshold);
@@ -241,7 +252,7 @@ export class AiChatService {
       take: FAQ_ANALYSIS_LIMIT,
     });
     if (messages.length === 0) {
-      return { analyzedMessages: 0, distinctQuestions: 0, candidatesCreated: 0, candidates: [] };
+      return { analyzedMessages: 0, distinctQuestions: 0, candidatesCreated: 0, skippedNoEvidence: 0, candidates: [] };
     }
 
     const countByNormalized = new Map<string, { sample: string; count: number }>();
@@ -257,57 +268,7 @@ export class AiChatService {
     }
     const questionCounts = [...countByNormalized.values()];
 
-    const prompt = [
-      `아래는 사내 ERP 챗봇에 실제로 들어온 사용자 질문과, 완전히 동일한 문장이 반복된 횟수입니다.`,
-      `표현은 다르지만 실질적으로 같은 의도를 묻는 질문들을 하나의 그룹으로 묶고,`,
-      `그룹에 속한 질문들의 횟수 합이 ${threshold} 이상인 그룹만 골라주세요.`,
-      `각 그룹마다 대표 질문 하나(representativeQuestion), 그 질문에 대한 간결한 한국어 답변(answer, 2~3문장),`,
-      `분류(category, 예: 인사/휴가/급여/재고/영업/생산/기타), 그룹의 총 횟수 합(matchedCount)을 만들어주세요.`,
-      `답변에는 이 회사의 실제 수치나 이름을 지어내지 말고, 일반적으로 안전한 안내(어느 화면에서 확인하는지, 누구에게 문의하는지 등) 위주로 작성하세요.`,
-      `기준(${threshold}회 이상)을 만족하는 그룹이 없으면 빈 배열을 반환하세요.`,
-      `정확히 이 JSON 스키마의 배열로만 응답하세요: [{ "representativeQuestion": string, "answer": string, "category": string, "matchedCount": number }]`,
-      '',
-      '질문 목록(질문 | 횟수):',
-      ...questionCounts.map((q) => `- ${q.sample} | ${q.count}`),
-    ].join('\n');
-
-    let response: Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>;
-    try {
-      response = await retryTransient(() =>
-        this.gemini!.models.generateContent({
-          model: this.model,
-          contents: prompt,
-          config: { responseMimeType: 'application/json' },
-        }),
-      );
-    } catch (error) {
-      // 한도 초과/일시 장애를 500(서버 버그)처럼 보이지 않게, 원인에 맞는 상태코드와 안내 문구로 돌려준다
-      this.logger.error(
-        'FAQ 클러스터링 Gemini 호출 실패',
-        error instanceof Error ? error.stack : String(error),
-      );
-      throw new AppException(
-        'AI_UNAVAILABLE',
-        aiFailureMessage(error),
-        httpStatusOf(error) === 429 ? 429 : 503,
-      );
-    }
-
-    let clusters: {
-      representativeQuestion: string;
-      answer: string;
-      category: string;
-      matchedCount: number;
-    }[];
-    try {
-      clusters = JSON.parse(response.text ?? '[]') as typeof clusters;
-    } catch (error) {
-      this.logger.error(
-        'FAQ 클러스터링 응답 파싱 실패',
-        error instanceof Error ? error.stack : String(error),
-      );
-      throw new BadRequestException('FAQ 후보 생성 응답을 해석하지 못했습니다. 다시 시도해주세요.');
-    }
+    const clusters = await this.clusterQuestions(questionCounts, threshold);
 
     const existing = await this.prisma.faqItem.findMany({
       where: { companyId },
@@ -315,18 +276,29 @@ export class AiChatService {
     });
     const existingQuestions = new Set(existing.map((f) => f.question.trim().toLowerCase()));
 
+    // 모델이 만든 matchedCount를 그대로 신뢰하지 않고 임계치를 서버에서 다시 확인한다(2차 방어).
+    const targets = clusters
+      .filter((c) => c.representativeQuestion.trim() && c.matchedCount >= threshold)
+      .filter((c) => !existingQuestions.has(c.representativeQuestion.trim().toLowerCase()))
+      .slice(0, FAQ_MAX_CANDIDATES);
+    const answers = await this.writeGroundedAnswers(companyId, targets);
+
     const created: { id: string; question: string }[] = [];
-    for (const cluster of clusters) {
-      // 모델이 만든 matchedCount를 그대로 신뢰하지 않고 임계치를 서버에서 다시 확인한다(2차 방어).
-      if (!cluster.representativeQuestion || !cluster.answer || cluster.matchedCount < threshold) continue;
+    let skippedNoEvidence = 0;
+    for (const [index, cluster] of targets.entries()) {
+      const answer = answers.get(String(index));
       const key = cluster.representativeQuestion.trim().toLowerCase();
+      if (!answer) {
+        skippedNoEvidence += 1;
+        continue;
+      }
       if (existingQuestions.has(key)) continue;
 
       const item = await this.prisma.faqItem.create({
         data: {
           companyId,
           question: cluster.representativeQuestion.trim(),
-          answer: cluster.answer.trim(),
+          answer,
           category: cluster.category || undefined,
           sourceType: 'AI_GENERATED',
           isPublished: false,
@@ -340,8 +312,63 @@ export class AiChatService {
       analyzedMessages: messages.length,
       distinctQuestions: questionCounts.length,
       candidatesCreated: created.length,
+      /** 근거(문서·화면 안내)를 찾지 못해 답변을 쓰지 않고 건너뛴 후보 수 — 사람이 직접 작성해야 한다 */
+      skippedNoEvidence,
       candidates: created,
     };
+  }
+
+  /** 1단계: 반복 질문을 의도별로 묶어 대표 질문만 뽑는다 */
+  private async clusterQuestions(questions: { sample: string; count: number }[], threshold: number) {
+    const response = await this.callFaqModel('FAQ 클러스터링', buildClusterPrompt(questions, threshold));
+    try {
+      return parseClusters(response.text);
+    } catch (error) {
+      this.logger.error('FAQ 클러스터링 응답 파싱 실패', error instanceof Error ? error.stack : String(error));
+      throw new BadRequestException('FAQ 후보 생성 응답을 해석하지 못했습니다. 다시 시도해주세요.');
+    }
+  }
+
+  /**
+   * 2단계: 대표 질문마다 공개 문서의 관련 본문을 찾아 근거로 주고 답변을 쓰게 한다. FAQ는 전 직원에게 보이므로
+   * 부서 전용 문서가 섞이지 않게 departmentId를 null로 검색한다(공개 문서만). 반환 키는 targets의 인덱스 문자열이다.
+   */
+  private async writeGroundedAnswers(companyId: string, targets: FaqCluster[]): Promise<Map<string, string>> {
+    if (targets.length === 0) return new Map();
+
+    const requests: FaqAnswerRequest[] = [];
+    for (const [index, cluster] of targets.entries()) {
+      const hits = await this.rag.search(companyId, null, cluster.representativeQuestion, FAQ_EVIDENCE_DOCUMENTS);
+      requests.push({
+        id: String(index),
+        question: cluster.representativeQuestion.trim(),
+        documents: (hits ?? []).map((h) => ({ title: h.title, summary: h.summary, passages: h.passages })),
+      });
+    }
+
+    const response = await this.callFaqModel('FAQ 답변 작성', buildAnswerPrompt(requests));
+    try {
+      return parseAnswers(response.text);
+    } catch (error) {
+      this.logger.error('FAQ 답변 응답 파싱 실패', error instanceof Error ? error.stack : String(error));
+      throw new BadRequestException('FAQ 후보 생성 응답을 해석하지 못했습니다. 다시 시도해주세요.');
+    }
+  }
+
+  private async callFaqModel(label: string, prompt: string) {
+    try {
+      return await retryTransient(() =>
+        this.gemini!.models.generateContent({
+          model: this.model,
+          contents: prompt,
+          config: { responseMimeType: 'application/json' },
+        }),
+      );
+    } catch (error) {
+      // 한도 초과/일시 장애를 500(서버 버그)처럼 보이지 않게, 원인에 맞는 상태코드와 안내 문구로 돌려준다
+      this.logger.error(`${label} Gemini 호출 실패`, error instanceof Error ? error.stack : String(error));
+      throw new AppException('AI_UNAVAILABLE', aiFailureMessage(error), httpStatusOf(error) === 429 ? 429 : 503);
+    }
   }
 
   private async generateReply(sessionId: string, userMessage: string, requester: AuthUser) {

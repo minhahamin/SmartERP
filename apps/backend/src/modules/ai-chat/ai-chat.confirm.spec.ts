@@ -42,6 +42,7 @@ function build(actionType: string, payload: Record<string, unknown>, granted: bo
     productionService as never,
     policy as never,
     {} as never,
+    {} as never,
     config as never,
   );
   return { service, prisma, leaveService, announcementsService, productionService, policy };
