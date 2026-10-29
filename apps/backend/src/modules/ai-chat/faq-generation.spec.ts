@@ -25,6 +25,7 @@ describe('FAQ 생성 프롬프트·해석', () => {
     expect(prompt).toContain('(관련 문서 없음)');
     expect(prompt).toContain('answer를 null로 둔다');
     expect(prompt).toContain('[화면 안내]');
+    expect(prompt).toContain('데이터를 조회하는 질문은 규정·매뉴얼 내용을 설명하지 말고');
   });
 
   it('잘못된 모양의 응답은 걸러낸다', () => {
