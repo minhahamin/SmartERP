@@ -56,6 +56,7 @@ type StatisticsTopic = (typeof STATISTICS_TOPICS)[number];
 const DEFAULT_SCHEDULE_RANGE_DAYS = 7;
 const SCHEDULE_RESULT_LIMIT = 20;
 const FAQ_RESULT_LIMIT = 8;
+const DEPARTMENT_MEMBER_LIMIT = 30;
 
 /** KST 기준 YYYY-MM-DD (서버 시간대와 무관하게 사용자가 말하는 "오늘"에 맞춘다) */
 function kstDateString(date: Date): string {
@@ -225,6 +226,21 @@ export class AiToolsService {
         parametersJsonSchema: {
           type: 'object',
           properties: { employeeName: { type: 'string' } },
+          required: [],
+        },
+      },
+    },
+    {
+      // 직원 연락처와 같은 수준의 정보(부서명·인원)라 별도 권한을 두지 않는다
+      permission: null,
+      keywords: ['부서', '팀', '조직', '소속', '인원'],
+      declaration: {
+        name: 'getDepartments',
+        description:
+          '부서 목록(부서장·재직 인원 수)을 조회한다. departmentName을 주면 해당 부서 소속 직원(이름/직급/전화번호)을 함께 반환한다.',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: { departmentName: { type: 'string', description: '부서명 일부(예: 인사)' } },
           required: [],
         },
       },
@@ -479,6 +495,8 @@ export class AiToolsService {
         return this.getLeaveBalance(requester, args.employeeName as string | undefined);
       case 'getEmployeeDirectory':
         return this.getEmployeeDirectory(requester, args.employeeName as string | undefined);
+      case 'getDepartments':
+        return this.getDepartments(requester, asString(args.departmentName));
       case 'getAnnouncements':
         return this.getAnnouncements(requester);
       case 'searchInternalDocuments':
@@ -735,6 +753,50 @@ export class AiToolsService {
         department: e.department?.name ?? '-',
         position: e.position,
         phone: e.phone,
+      })),
+    };
+  }
+
+  private async getDepartments(requester: AuthUser, departmentName?: string) {
+    const departments = await this.prisma.department.findMany({
+      where: {
+        companyId: requester.companyId,
+        ...(departmentName ? { name: { contains: departmentName, mode: 'insensitive' } } : {}),
+      },
+      include: { _count: { select: { users: { where: { status: 'ACTIVE' } } } } },
+      orderBy: { name: 'asc' },
+    });
+    if (departments.length === 0) return { found: false, message: '일치하는 부서를 찾지 못했습니다.' };
+
+    const managerIds = departments.map((d) => d.managerId).filter((id): id is string => !!id);
+    const managers = managerIds.length
+      ? await this.prisma.user.findMany({ where: { id: { in: managerIds } }, select: { id: true, name: true } })
+      : [];
+    const managerName = new Map(managers.map((m) => [m.id, m.name]));
+
+    // 부서명으로 좁혔을 때만 소속 직원을 내려준다(전체 목록에서 전 직원을 노출하지 않는다)
+    const members = departmentName
+      ? await this.prisma.user.findMany({
+          where: { companyId: requester.companyId, status: 'ACTIVE', departmentId: { in: departments.map((d) => d.id) } },
+          select: { name: true, position: true, phone: true, departmentId: true },
+          orderBy: { name: 'asc' },
+        })
+      : [];
+
+    return {
+      found: true,
+      items: departments.map((d) => ({
+        name: d.name,
+        manager: d.managerId ? (managerName.get(d.managerId) ?? '-') : '-',
+        headcount: d._count.users,
+        ...(departmentName
+          ? {
+              members: members
+                .filter((m) => m.departmentId === d.id)
+                .slice(0, DEPARTMENT_MEMBER_LIMIT)
+                .map((m) => ({ name: m.name, position: m.position, phone: m.phone })),
+            }
+          : {}),
       })),
     };
   }

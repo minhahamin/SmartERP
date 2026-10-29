@@ -333,4 +333,37 @@ describe('AiToolsService — 일정/통계/FAQ 도구', () => {
     expect(miss.matchedByKeyword).toBe(false);
     expect(miss.items).toHaveLength(2);
   });
+
+  it('부서 목록은 인원 수만, 부서명을 주면 소속 직원까지 반환한다', async () => {
+    const { service, prisma } = build([]);
+    const p = prisma as unknown as {
+      department: { findMany: jest.Mock };
+      user: { findMany: jest.Mock };
+    };
+    p.department = {
+      findMany: jest.fn().mockResolvedValue([
+        { id: 'd1', name: '인사팀', managerId: 'u1', _count: { users: 2 } },
+      ]),
+    };
+    p.user.findMany = jest
+      .fn()
+      .mockResolvedValueOnce([{ id: 'u1', name: '최유진' }])
+      .mockResolvedValueOnce([
+        { name: '최유진', position: '팀장', phone: '010-1', departmentId: 'd1' },
+        { name: '박지훈', position: '사원', phone: '010-2', departmentId: 'd1' },
+      ]);
+
+    const result = (await service.execute('getDepartments', { departmentName: '인사' }, authUser(), 's')) as {
+      items: { name: string; manager: string; headcount: number; members: { name: string }[] }[];
+    };
+    expect(result.items[0].manager).toBe('최유진');
+    expect(result.items[0].headcount).toBe(2);
+    expect(result.items[0].members.map((m) => m.name)).toEqual(['최유진', '박지훈']);
+
+    p.user.findMany = jest.fn().mockResolvedValueOnce([{ id: 'u1', name: '최유진' }]);
+    const list = (await service.execute('getDepartments', {}, authUser(), 's')) as {
+      items: { members?: unknown }[];
+    };
+    expect(list.items[0].members).toBeUndefined();
+  });
 });
