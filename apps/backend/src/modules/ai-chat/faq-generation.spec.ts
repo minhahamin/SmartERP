@@ -33,6 +33,8 @@ describe('FAQ 생성 프롬프트·해석', () => {
     expect(parseClusters('[{"representativeQuestion":"q","matchedCount":3,"category":"c"},{"x":1}]')).toHaveLength(1);
     const answers = parseAnswers('[{"id":"0","answer":" 답 "},{"id":"1","answer":null},{"id":"2","answer":"  "},{"answer":"x"}]');
     expect([...answers.entries()]).toEqual([['0', '답']]);
+    // 모델이 JSON null 대신 문자열로 "근거 없음"을 돌려준 경우도 답변으로 취급하지 않는다
+    expect(parseAnswers('[{"id":"0","answer":"null"},{"id":"1","answer":"None"},{"id":"2","answer":"없음"}]').size).toBe(0);
   });
 });
 

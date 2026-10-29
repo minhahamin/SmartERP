@@ -107,7 +107,10 @@ export function parseClusters(text: string | undefined): FaqCluster[] {
   );
 }
 
-/** id → 답변. 비어 있거나 문자열이 아닌 답변은 근거 없음으로 보고 넣지 않는다 */
+/** 모델이 JSON null 대신 문자열로 "근거 없음"을 돌려주는 경우가 있어(실제로 "null"이 답변으로 저장된 적이 있다) 함께 걸러낸다 */
+const NO_ANSWER_TEXTS = new Set(['null', 'none', 'n/a', 'undefined', '없음', '해당 없음']);
+
+/** id → 답변. 비어 있거나 문자열이 아닌 답변, "null" 같은 자리표시 문자열은 근거 없음으로 보고 넣지 않는다 */
 export function parseAnswers(text: string | undefined): Map<string, string> {
   const parsed: unknown = JSON.parse(text ?? '[]');
   const answers = new Map<string, string>();
@@ -115,7 +118,9 @@ export function parseAnswers(text: string | undefined): Map<string, string> {
   for (const item of parsed) {
     if (typeof item !== 'object' || item === null) continue;
     const { id, answer } = item as { id?: unknown; answer?: unknown };
-    if (typeof id === 'string' && typeof answer === 'string' && answer.trim()) answers.set(id, answer.trim());
+    if (typeof id !== 'string' || typeof answer !== 'string') continue;
+    const text = answer.trim();
+    if (text && !NO_ANSWER_TEXTS.has(text.toLowerCase())) answers.set(id, text);
   }
   return answers;
 }
