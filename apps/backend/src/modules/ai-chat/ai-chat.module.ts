@@ -7,11 +7,12 @@ import { ScheduleModule } from '../schedule/schedule.module';
 import { StatisticsModule } from '../statistics/statistics.module';
 import { AiChatController } from './ai-chat.controller';
 import { AiChatService } from './ai-chat.service';
+import { AiMemoryService } from './ai-memory.service';
 import { AiToolsService } from './ai-tools.service';
 
 @Module({
   imports: [LeaveModule, AnnouncementsModule, ProductionModule, RagModule, ScheduleModule, StatisticsModule],
   controllers: [AiChatController],
-  providers: [AiChatService, AiToolsService],
+  providers: [AiChatService, AiToolsService, AiMemoryService],
 })
 export class AiChatModule {}

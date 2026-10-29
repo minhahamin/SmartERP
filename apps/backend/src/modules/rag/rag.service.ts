@@ -127,6 +127,18 @@ export class RagService {
     ]);
   }
 
+  /** 문서 외 용도(과거 대화 검색 등)에서 쓰는 단건 임베딩. 키가 없거나 호출이 실패하면 null — 호출자가 기능을 건너뛴다 */
+  async embedText(text: string, taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY'): Promise<number[] | null> {
+    if (!this.gemini || !text.trim()) return null;
+    try {
+      const [vector] = await this.embed([text], taskType);
+      return vector;
+    } catch (error) {
+      this.logger.warn(`임베딩 실패: ${error instanceof Error ? error.message : error}`);
+      return null;
+    }
+  }
+
   private async embed(texts: string[], taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY'): Promise<number[][]> {
     const vectors: number[][] = [];
     for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
@@ -200,6 +212,6 @@ export class RagService {
 }
 
 /** pgvector 입력 문자열 형식 '[0.1,0.2,...]' */
-function toVectorLiteral(values: number[]): string {
+export function toVectorLiteral(values: number[]): string {
   return `[${values.join(',')}]`;
 }

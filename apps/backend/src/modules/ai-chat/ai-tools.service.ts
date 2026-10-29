@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PolicyService } from '../../common/services/policy.service';
 import { LeaveService } from '../leave/leave.service';
 import { LEAVE_TYPE_LABEL } from '../leave/leave-constants';
+import { AiMemoryService } from './ai-memory.service';
 import { RagService } from '../rag/rag.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { StatisticsService } from '../statistics/statistics.service';
@@ -90,6 +91,7 @@ export class AiToolsService {
     private readonly rag: RagService,
     private readonly scheduleService: ScheduleService,
     private readonly statisticsService: StatisticsService,
+    private readonly memory: AiMemoryService,
   ) {}
 
   private readonly tools: ToolDefinition[] = [
@@ -242,6 +244,48 @@ export class AiToolsService {
           type: 'object',
           properties: { departmentName: { type: 'string', description: '부서명 일부(예: 인사)' } },
           required: [],
+        },
+      },
+    },
+    {
+      // 본인 전용 개인 메모리라 별도 리소스 권한이 없다. 사용자가 명시적으로 요청했을 때만 호출하게 설명에 못 박는다
+      permission: null,
+      keywords: ['기억', '앞으로', '항상', '메모', '저장해', '잊어', '지워', '외워'],
+      declaration: {
+        name: 'rememberUserFact',
+        description:
+          '사용자가 "기억해줘/앞으로 ~해줘"처럼 명시적으로 요청했을 때만, 사용자에 대한 선호·맥락 한 가지를 짧은 한 문장으로 저장한다(200자 이하). 조회한 급여·연락처 같은 업무 데이터나 비밀번호는 저장하지 않는다.',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: { fact: { type: 'string', description: '저장할 내용 한 문장' } },
+          required: ['fact'],
+        },
+      },
+    },
+    {
+      permission: null,
+      keywords: ['기억', '잊어', '지워', '삭제', '외워'],
+      declaration: {
+        name: 'forgetUserFact',
+        description: '사용자가 "~는 잊어줘/기억 지워줘"라고 요청했을 때, 해당 키워드가 들어간 저장된 기억을 삭제한다.',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: { keyword: { type: 'string', description: '지울 기억에 들어있는 핵심 단어' } },
+          required: ['keyword'],
+        },
+      },
+    },
+    {
+      permission: null,
+      keywords: ['전에', '저번', '지난번', '이전', '아까', '예전', '물어봤', '물었', '말했', '기억나'],
+      declaration: {
+        name: 'searchPastConversations',
+        description:
+          '사용자가 이전 대화에서 물어봤던 질문을 의미로 검색한다(현재 대화 제외). 질문과 사용된 도구만 돌려주며 당시의 답변이나 수치는 없다. 값이 필요하면 돌려받은 도구로 지금 다시 조회해서 답한다.',
+        parametersJsonSchema: {
+          type: 'object',
+          properties: { query: { type: 'string', description: '찾고 싶은 이전 질문의 주제' } },
+          required: ['query'],
         },
       },
     },
@@ -497,6 +541,12 @@ export class AiToolsService {
         return this.getEmployeeDirectory(requester, args.employeeName as string | undefined);
       case 'getDepartments':
         return this.getDepartments(requester, asString(args.departmentName));
+      case 'rememberUserFact':
+        return this.memory.remember(requester.sub, asString(args.fact));
+      case 'forgetUserFact':
+        return this.memory.forget(requester.sub, asString(args.keyword));
+      case 'searchPastConversations':
+        return this.searchPastConversations(requester, sessionId, asString(args.query));
       case 'getAnnouncements':
         return this.getAnnouncements(requester);
       case 'searchInternalDocuments':
@@ -799,6 +849,14 @@ export class AiToolsService {
           : {}),
       })),
     };
+  }
+
+  private async searchPastConversations(requester: AuthUser, sessionId: string, query?: string) {
+    if (!query?.trim()) return { error: '찾을 주제를 알려주세요.' };
+    const past = await this.memory.searchPast(requester.sub, sessionId, query);
+    if (!past) return { error: '지금은 이전 대화를 검색할 수 없습니다.' };
+    if (past.length === 0) return { found: false, message: '이전 대화 기록이 없습니다.' };
+    return { found: true, items: past };
   }
 
   private async getAnnouncements(requester: AuthUser) {

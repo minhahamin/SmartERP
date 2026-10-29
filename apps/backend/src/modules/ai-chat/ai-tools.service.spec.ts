@@ -45,6 +45,11 @@ function build(grantedReadResources: string[], hasPermission = false) {
     getMyCharts: jest.fn(),
     getDashboard: jest.fn(),
   };
+  const memory = {
+    remember: jest.fn().mockResolvedValue({ saved: true }),
+    forget: jest.fn().mockResolvedValue({ deleted: 1 }),
+    searchPast: jest.fn().mockResolvedValue([]),
+  };
   const service = new AiToolsService(
     prisma as never,
     leaveService as never,
@@ -52,8 +57,9 @@ function build(grantedReadResources: string[], hasPermission = false) {
     rag as never,
     scheduleService as never,
     statisticsService as never,
+    memory as never,
   );
-  return { service, prisma, leaveService, policy, rag, scheduleService, statisticsService };
+  return { service, prisma, leaveService, policy, rag, scheduleService, statisticsService, memory };
 }
 
 const names = (declarations: { name?: string }[]) => declarations.map((d) => d.name);
@@ -365,5 +371,30 @@ describe('AiToolsService — 일정/통계/FAQ 도구', () => {
       items: { members?: unknown }[];
     };
     expect(list.items[0].members).toBeUndefined();
+  });
+
+  it('메모리 도구는 본인 userId로 위임하고, 과거 대화 검색은 현재 세션을 제외하도록 sessionId를 넘긴다', async () => {
+    const { service, memory } = build([]);
+    await service.execute('rememberUserFact', { fact: '영업팀 소속' }, authUser(), 's1');
+    expect(memory.remember).toHaveBeenCalledWith('user-1', '영업팀 소속');
+    await service.execute('forgetUserFact', { keyword: '영업' }, authUser(), 's1');
+    expect(memory.forget).toHaveBeenCalledWith('user-1', '영업');
+
+    memory.searchPast.mockResolvedValueOnce([{ question: '연차 며칠?', tools: 'getLeaveBalance', askedAt: '2026-10-01' }]);
+    const found = (await service.execute('searchPastConversations', { query: '연차' }, authUser(), 's1')) as {
+      found: boolean;
+    };
+    expect(memory.searchPast).toHaveBeenCalledWith('user-1', 's1', '연차');
+    expect(found.found).toBe(true);
+
+    memory.searchPast.mockResolvedValueOnce(null);
+    expect(await service.execute('searchPastConversations', { query: '연차' }, authUser(), 's1')).toHaveProperty('error');
+    expect(await service.execute('searchPastConversations', { query: ' ' }, authUser(), 's1')).toHaveProperty('error');
+  });
+
+  it('"기억해줘"가 든 질문에는 메모리 도구가 후보에 오른다', async () => {
+    const { service } = build([]);
+    const declared = names(await service.getDeclarations(authUser(), '앞으로 영업 위주로 알려줘, 기억해줘'));
+    expect(declared).toContain('rememberUserFact');
   });
 });

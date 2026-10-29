@@ -151,6 +151,8 @@ model User {
   notifications     Notification[]
   chatSessions      ChatSession[]
   aiActionDrafts    AiActionDraft[]
+  aiMemories        AiMemory[]
+  chatTurns         ChatTurnEmbedding[]
   auditLogs         AuditLog[]
 
   @@unique([companyId, email])
@@ -664,6 +666,7 @@ model ChatSession {
   user         User            @relation(fields: [userId], references: [id])
   messages     ChatMessage[]
   actionDrafts AiActionDraft[]
+  turns        ChatTurnEmbedding[]
 
   @@index([userId])
   @@map("chat_sessions")
@@ -688,6 +691,39 @@ model ChatMessage {
 
   @@index([sessionId, createdAt])
   @@map("chat_messages")
+}
+
+/// 사용자가 "기억해줘"라고 명시한 개인 메모리. 매 대화의 시스템 프롬프트에 들어간다(본인 것만, 사용자가 삭제 가능).
+model AiMemory {
+  id        String   @id @default(uuid())
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("ai_memories")
+}
+
+/// 과거 대화 검색용 임베딩. 질문(USER 메시지)만 저장한다 — 답변·조회 결과를 다시 꺼내 쓰면 권한이 바뀐 뒤에도
+/// 옛 데이터가 노출되므로, 과거에 무엇을 물었는지만 찾고 값은 도구로 다시 조회하게 한다.
+model ChatTurnEmbedding {
+  id        String                      @id @default(uuid())
+  userId    String
+  sessionId String
+  question  String
+  /// 그 턴에 쓰인 도구 이름들(쉼표 구분) — 다시 조회할 때 힌트로 쓴다
+  tools     String?
+  embedding Unsupported("vector(1536)")
+  createdAt DateTime                    @default(now())
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+  @@map("chat_turn_embeddings")
 }
 
 enum ChatRole {

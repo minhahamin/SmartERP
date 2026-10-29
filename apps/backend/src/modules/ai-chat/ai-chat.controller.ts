@@ -72,6 +72,24 @@ export class AiChatController {
     res.send(buffer);
   }
 
+  @Get('memories')
+  @ApiOperation({ summary: '내가 챗봇에게 기억시킨 내용 목록' })
+  listMemories(@CurrentUser() user: AuthUser) {
+    return this.aiChatService.listMemories(user.sub);
+  }
+
+  @Delete('memories/:id')
+  @ApiOperation({ summary: '기억 하나 삭제(본인 것만)' })
+  deleteMemory(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.aiChatService.deleteMemory(id, user.sub);
+  }
+
+  @Delete('memories')
+  @ApiOperation({ summary: '내 기억과 과거 질문 검색 기록을 모두 삭제' })
+  deleteAllMemories(@CurrentUser() user: AuthUser) {
+    return this.aiChatService.deleteAllMemories(user.sub);
+  }
+
   @Get('faq')
   @ApiOperation({ summary: '게시된 FAQ 목록' })
   listFaq(@Query('category') category: string | undefined, @CurrentUser() user: AuthUser) {
