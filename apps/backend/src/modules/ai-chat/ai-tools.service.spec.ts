@@ -35,8 +35,9 @@ function build(grantedReadResources: string[], hasPermission = false) {
   };
   const leaveService = { create: jest.fn() };
   const policy = { hasPermission: jest.fn().mockResolvedValue(hasPermission) };
-  const service = new AiToolsService(prisma as never, leaveService as never, policy as never);
-  return { service, prisma, leaveService, policy };
+  const rag = { search: jest.fn().mockResolvedValue(null) };
+  const service = new AiToolsService(prisma as never, leaveService as never, policy as never, rag as never);
+  return { service, prisma, leaveService, policy, rag };
 }
 
 const names = (declarations: { name?: string }[]) => declarations.map((d) => d.name);

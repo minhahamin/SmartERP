@@ -26,6 +26,7 @@
     "prisma:seed-demo-docs": "ts-node prisma/seed-demo-documents.ts",
     "prisma:normalize-demo": "ts-node prisma/normalize-demo-data.ts",
     "prisma:seed-demo-all": "npm run prisma:seed-demo && npm run prisma:seed-demo-h2 && npm run prisma:seed-demo-faq && npm run prisma:seed-demo-docs && npm run prisma:normalize-demo",
+    "rag:reindex": "ts-node scripts/reindex-documents.ts",
     "prisma:studio": "prisma studio",
     "swagger:generate": "ts-node scripts/generate-openapi.ts"
   },

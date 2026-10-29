@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PolicyService } from '../../common/services/policy.service';
 import { LeaveService } from '../leave/leave.service';
 import { LEAVE_TYPE_LABEL } from '../leave/leave-constants';
+import { RagService } from '../rag/rag.service';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 
 const VALID_PRODUCTION_STATUSES: ProductionStatus[] = [
@@ -61,6 +62,7 @@ export class AiToolsService {
     private readonly prisma: PrismaService,
     private readonly leaveService: LeaveService,
     private readonly policy: PolicyService,
+    private readonly rag: RagService,
   ) {}
 
   private readonly tools: ToolDefinition[] = [
@@ -676,6 +678,20 @@ export class AiToolsService {
   }
 
   private async searchInternalDocuments(requester: AuthUser, query: string) {
+    // 1순위: 본문 임베딩 시맨틱 검색. 임베딩을 못 쓰거나 결과가 없으면 제목·요약 키워드 검색으로 내려간다
+    const semantic = await this.rag.search(requester.companyId, requester.departmentId, query);
+    if (semantic && semantic.length > 0) {
+      return {
+        found: true,
+        items: semantic.map((d) => ({
+          title: d.title,
+          summary: d.summary,
+          category: d.category,
+          relevantPassages: d.passages,
+        })),
+      };
+    }
+
     const terms = searchTerms(query);
     const candidates = await this.prisma.document.findMany({
       where: {

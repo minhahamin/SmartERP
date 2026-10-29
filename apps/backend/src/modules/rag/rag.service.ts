@@ -1,22 +1,38 @@
 import { readFile } from 'fs/promises';
 import { join } from 'path';
+import { randomUUID } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { PDFParse } from 'pdf-parse';
 import { GoogleGenAI } from '@google/genai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { retryTransient } from '../../common/utils/retry-transient';
+import { chunkText } from './chunker';
+
+/** document_chunks.embedding 컬럼이 vector(1536)이라 임베딩 출력 차원을 여기에 맞춘다 */
+const EMBEDDING_DIMENSIONS = 1536;
+const EMBED_BATCH_SIZE = 50;
+
+export interface DocumentSearchHit {
+  documentId: string;
+  title: string;
+  category: string;
+  summary: string | null;
+  /** 질문과 가장 가까운 본문 조각들 */
+  passages: string[];
+}
 
 /**
- * docs/08-api-design.md 8.2 — "내부 서비스성 모듈". 문서 관리 화면의 "AI 색인상태 / AI 요약"에
- * 필요한 최소 범위(PDF 텍스트 추출 → Gemini 요약 → indexStatus 전이)만 구현한다.
- * pgvector 임베딩 적재(DocumentChunk)는 챗봇의 문서 시맨틱 검색(docs 09~11) 범위라 이번에는 다루지 않는다.
+ * docs/08-api-design.md 8.2 — "내부 서비스성 모듈". PDF 텍스트 추출 → Gemini 요약 → 청크 분할·임베딩 →
+ * pgvector(DocumentChunk) 적재 → indexStatus 전이까지 맡고, 챗봇의 문서 시맨틱 검색(search)을 제공한다.
  */
 @Injectable()
 export class RagService {
   private readonly logger = new Logger(RagService.name);
   private readonly gemini: GoogleGenAI | null;
   private readonly model: string;
+  private readonly embeddingModel: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -25,6 +41,7 @@ export class RagService {
     const apiKey = config.get<string>('GEMINI_API_KEY');
     this.gemini = apiKey ? new GoogleGenAI({ apiKey }) : null;
     this.model = config.get<string>('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+    this.embeddingModel = config.get<string>('GEMINI_EMBEDDING_MODEL') ||'gemini-embedding-001';
   }
 
   /** 업로드/새 버전 등록 직후 호출자가 await 없이 fire-and-forget으로 호출한다 */
@@ -52,6 +69,9 @@ export class RagService {
       const summary = text.trim()
         ? await this.summarize(text, document.title)
         : '문서에서 추출 가능한 텍스트가 없습니다.';
+
+      // 요약과 임베딩이 모두 끝나야 DONE — 새 버전이면 이전 청크를 지우고 다시 적재한다
+      await this.indexChunks(documentId, text);
 
       await this.prisma.document.update({
         where: { id: documentId },
@@ -91,4 +111,95 @@ export class RagService {
     );
     return response.text?.trim() ?? '요약을 생성하지 못했습니다.';
   }
+
+  private async indexChunks(documentId: string, text: string): Promise<void> {
+    const chunks = chunkText(text);
+    const embeddings = await this.embed(chunks, 'RETRIEVAL_DOCUMENT');
+
+    await this.prisma.$transaction([
+      this.prisma.documentChunk.deleteMany({ where: { documentId } }),
+      ...chunks.map(
+        (content, index) => this.prisma.$executeRaw`
+          INSERT INTO document_chunks (id, "documentId", "chunkIndex", content, "tokenCount", embedding)
+          VALUES (${randomUUID()}, ${documentId}, ${index}, ${content}, ${Math.ceil(content.length / 2)},
+                  ${toVectorLiteral(embeddings[index])}::vector)`,
+      ),
+    ]);
+  }
+
+  private async embed(texts: string[], taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY'): Promise<number[][]> {
+    const vectors: number[][] = [];
+    for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
+      const batch = texts.slice(i, i + EMBED_BATCH_SIZE);
+      const response = await retryTransient(() =>
+        this.gemini!.models.embedContent({
+          model: this.embeddingModel,
+          contents: batch,
+          config: { taskType, outputDimensionality: EMBEDDING_DIMENSIONS },
+        }),
+      );
+      const values = response.embeddings?.map((e) => e.values ?? []) ?? [];
+      if (values.length !== batch.length || values.some((v) => v.length !== EMBEDDING_DIMENSIONS)) {
+        throw new Error('임베딩 응답 개수 또는 차원이 요청과 다릅니다.');
+      }
+      vectors.push(...values);
+    }
+    return vectors;
+  }
+
+  /**
+   * 질문과 의미가 가까운 본문 조각을 가진 문서를 가까운 순으로 돌려준다. 거리 임계값은 두지 않는다 —
+   * gemini-embedding의 코사인 거리는 무관한 질문에서도 0.35~0.45에 몰려 관련 여부를 가르지 못하므로,
+   * 관련성 판단은 본문 조각을 받은 모델에 맡긴다. 접근 범위(회사·공개/부서)는 SQL에서 건다.
+   * 임베딩을 쓸 수 없거나(키 미설정) 호출이 실패하면 null을 돌려줘 호출자가 키워드 검색으로 대체하게 한다.
+   */
+  async search(
+    companyId: string,
+    departmentId: string | null,
+    query: string,
+    limit = 3,
+  ): Promise<DocumentSearchHit[] | null> {
+    if (!this.gemini || !query.trim()) return null;
+
+    let queryVector: number[];
+    try {
+      [queryVector] = await this.embed([query], 'RETRIEVAL_QUERY');
+    } catch (error) {
+      this.logger.warn(`질문 임베딩 실패 — 키워드 검색으로 대체: ${error instanceof Error ? error.message : error}`);
+      return null;
+    }
+
+    const vector = toVectorLiteral(queryVector);
+    const rows = await this.prisma.$queryRaw<
+      { documentId: string; title: string; category: string; summary: string | null; content: string; distance: number }[]
+    >`
+      SELECT d.id AS "documentId", d.title, d.category::text AS category, d.summary, c.content,
+             (c.embedding <=> ${vector}::vector) AS distance
+      FROM document_chunks c
+      JOIN documents d ON d.id = c."documentId"
+      WHERE d."companyId" = ${companyId}
+        AND d."indexStatus" = 'DONE'
+        AND (d."isPublic" = true ${departmentId ? Prisma.sql`OR d."departmentId" = ${departmentId}` : Prisma.empty})
+      ORDER BY c.embedding <=> ${vector}::vector
+      LIMIT ${limit * 3}`;
+
+    const byDocument = new Map<string, DocumentSearchHit>();
+    for (const row of rows) {
+      const hit = byDocument.get(row.documentId) ?? {
+        documentId: row.documentId,
+        title: row.title,
+        category: row.category,
+        summary: row.summary,
+        passages: [],
+      };
+      if (hit.passages.length < 2) hit.passages.push(row.content);
+      byDocument.set(row.documentId, hit);
+    }
+    return [...byDocument.values()].slice(0, limit);
+  }
+}
+
+/** pgvector 입력 문자열 형식 '[0.1,0.2,...]' */
+function toVectorLiteral(values: number[]): string {
+  return `[${values.join(',')}]`;
 }
