@@ -52,7 +52,7 @@ ERP 데이터(직원/급여/재고/생산/거래처)를 관리하는 동시에, 
 |---|---|
 | Frontend | React 19, TypeScript, Vite, React Query, Zustand, React Router, Tailwind CSS, shadcn/ui, Recharts |
 | Backend | NestJS, TypeScript, Prisma, PostgreSQL, JWT, Swagger |
-| AI | Google Gemini API(`gemini-2.5-flash`) Function Calling, 역할 기반 도구 오케스트레이션 |
+| AI | Google Gemini API(`gemini-2.5-flash`) Function Calling, 역할 기반 도구 오케스트레이션 / RAG(Gemini 임베딩 + pgvector) |
 | Infra | Docker(멀티스테이지 빌드), Railway (Frontend/Backend 개별 배포) |
 
 ## 아키텍처
@@ -66,17 +66,17 @@ flowchart TB
     subgraph Railway["Railway"]
         FE["Frontend 컨테이너\nNginx + 정적 파일"]
         API["Backend 컨테이너\nNestJS API (REST + Swagger)"]
-        PG[("PostgreSQL\n+ pgvector Extension(스키마 준비)")]
+        PG[("PostgreSQL\n+ pgvector (문서 청크 임베딩)")]
     end
 
     subgraph External["외부 서비스"]
-        Gemini["Google Gemini API\nFunction Calling / 요약"]
+        Gemini["Google Gemini API\nFunction Calling / 요약 / 임베딩"]
     end
 
     Browser -- HTTPS --> FE
     Browser -- "/api/v1/*" --> API
     API -- "Prisma Client" --> PG
-    API -- "도구 호출 / 문서 요약" --> Gemini
+    API -- "도구 호출 / 문서 요약 / 임베딩" --> Gemini
 ```
 
 **설계와 구현의 차이(의도적 단순화)** — 이 프로젝트는 `docs/09~11`, `docs/13~15`에 처음 목표로 삼은 아키텍처(OpenAI + LangChain, pgvector 유사도 검색, Redis/BullMQ 색인 큐, AWS EC2 + Nginx + GitHub Actions)를 먼저 설계했다. 실제 구현에서는 포트폴리오 규모에 맞춰 다음과 같이 의도적으로 단순화했고, 근거는 코드 주석에 남겨두었다.
@@ -84,7 +84,7 @@ flowchart TB
 | 설계 문서 기준 | 실제 구현 | 이유 |
 |---|---|---|
 | OpenAI GPT-4o + LangChain | Google Gemini(`@google/genai`) 직접 호출 | 동일한 Function Calling 오케스트레이션을 더 적은 의존성으로 구현 |
-| pgvector 임베딩 유사도 검색 | 문서 제목/요약 키워드 매칭 (`DocumentChunk` + `vector(1536)` 컬럼은 스키마에 준비만 해둠) | 별도 색인 파이프라인 없이도 핵심 가치(권한 인지 검색)를 먼저 증명 |
+| OpenAI 임베딩 + pgvector 유사도 검색 | **구현함** — 문서 본문을 청크로 나눠 Gemini `gemini-embedding-001`(1536차원)로 임베딩하고 `document_chunks.embedding`에 저장, 코사인 거리(`<=>`)로 검색. 권한 조건(회사·공개/소속 부서)을 SQL에서 함께 건다. 임베딩 호출이 불가하면 제목/요약 키워드 검색으로 폴백 | 별도 벡터 DB 없이 기존 Postgres 하나로 해결. HNSW 인덱스·거리 임계값은 이 규모에서 불필요해 두지 않았다 |
 | Redis + BullMQ 비동기 색인 큐 | 온디맨드 동기 처리(관리자가 트리거) | 별도 큐 인프라 없이 동일 기능을 단순 경로로 구현 |
 | AWS EC2 + Docker Compose + Nginx + GitHub Actions | Railway (Frontend/Backend 각각 Dockerfile 배포) | 포트폴리오 규모에서 운영 부담을 낮추면서 컨테이너 기반 배포 경험은 유지 |
 
@@ -94,7 +94,7 @@ flowchart TB
 
 `Gemini 2.5 Flash` function calling 기반 오케스트레이션 (턴당 최대 4회 도구 호출, 최근 대화 10턴 유지).
 
-### 1. 조회(READ) 도구 — 11종
+### 1. 조회(READ) 도구 — 16종
 
 | 분류 | 도구 | 설명 |
 |---|---|---|
@@ -104,8 +104,14 @@ flowchart TB
 | 거래처 | `getPartnerInfo` | 이름 검색 또는 상위 거래처 목록 |
 | 생산 | `getProductionOrdersByStatus` | 상태별 생산 오더(기본: 진행중+지연) |
 | 인사 | `getAttendanceSummary` / `getPayrollStatus` / `getLeaveBalance` / `getEmployeeDirectory` | 근태·급여·연차잔액·사내 연락처(본인 우선, ADMIN/HR_MANAGER만 타인 조회) |
+| 조직 | `getDepartments` | 부서 목록·부서장·재직 인원, 부서명을 주면 소속 직원 |
 | 공지 | `getAnnouncements` | 역할별로 볼 수 있는 공지 |
-| 문서 | `searchInternalDocuments` | 사내 문서 제목/요약 키워드 검색 |
+| 일정 | `getSchedules` | 기간별 일정(기본: 오늘부터 7일), 일정 화면과 같은 공개 범위 |
+| 통계 | `getStatistics` | 대시보드·매출·재고·인사·내 근태 집계(통계 화면의 역할 제한 그대로) |
+| FAQ | `searchFaq` | 게시된 FAQ를 질문·답변·분류 키워드로 검색 |
+| 문서 | `searchInternalDocuments` | 사내 문서 **본문 RAG 검색**(pgvector 시맨틱 검색, 권한 범위 내 문서만) |
+
+> **RAG는 문서에만 쓴다.** 급여·재고·일정 같은 정형 데이터는 임베딩하지 않고 Function Calling으로 DB를 직접 조회한다(정확한 수치가 필요하고 권한 스코프를 쿼리에 강제할 수 있기 때문). 문서 색인은 업로드 시 자동으로 이뤄지고, 기존 문서는 `npm run rag:reindex`(backend)로 다시 색인한다.
 
 ### 2. 액션 제안 — "제안 → 사람 확인 → 확정" (3종)
 
@@ -122,7 +128,7 @@ AI는 데이터를 직접 바꾸지 않고 **초안(Draft)만** 만든다. 화�
 1. **노출 단계**: 호출자의 `RolePermission`에 해당 리소스 `READ` 권한이 없으면 도구 자체를 목록에서 제외 (LLM은 애초에 그 도구의 존재를 모른다)
 2. **실행 단계**: `EMPLOYEE`는 조회 대상을 본인으로 강제하고, 모든 쿼리에 `companyId` 스코프를 건다 — LLM이 인자를 잘못/악의적으로 채워도 서버가 실제 권한으로 덮어씀
 
-질문에 포함된 키워드로 관련 도구만 1차로 좁혀 모델에 제공해, 엉뚱한 도구 선택이나 인자 지어내기(hallucination)를 줄인다.
+질문에 포함된 키워드로 관련 도구만 1차로 좁혀 모델에 제공해, 엉뚱한 도구 선택이나 인자 지어내기(hallucination)를 줄인다. 문서 검색 도구는 규정 키워드가 없는 질문("병가는 며칠까지?")도 놓치지 않도록 권한이 있으면 항상 후보에 포함한다.
 
 ### 4. FAQ 자동화 (Human-in-the-loop)
 
@@ -196,7 +202,8 @@ AI는 데이터를 직접 바꾸지 않고 **초안(Draft)만** 만든다. 화�
 | 변수 | 용도 | 비고 |
 |---|---|---|
 | `GEMINI_API_KEY` | AI 어시스턴트·문서 요약·FAQ 생성 | 없으면 AI 기능이 비활성화됩니다 |
-| `GEMINI_MODEL` | 사용할 Gemini 모델 이름 | 비우면 `gemini-2.5-flash`. 무료 등급은 이 모델이 **하루 20회**라 데모가 금방 멈추므로, 결제를 연결하거나 쿼터가 넉넉한 모델로 바꿉니다. 자동 폴백은 아닙니다 |
+| `GEMINI_EMBEDDING_MODEL` | 문서 RAG용 임베딩 모델 | 비우면 `gemini-embedding-001`(1536차원 고정) |
+| `GEMINI_MODEL` | 사용할 Gemini 모델 이름 | 비우면 `gemini-2.5-flash`. 무료 등급은 `gemini-2.5-flash`·`flash-lite` 모두 **하루 20회**라 데모가 금방 멈추므로, 결제를 연결하거나 쿼터가 넉넉한 모델로 바꿉니다. 자동 폴백은 아닙니다 |
 | `FRONTEND_URL` | 비밀번호 재설정 메일의 링크 주소 | 예: `https://erpilot-web.up.railway.app`. 비우면 `CORS_ORIGIN`의 첫 값을 씁니다 |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_USER` `SMTP_PASS` | 메일 발송 | 비우면 메일을 보내지 않습니다(운영에서는 링크도 로그에 남기지 않음) |
 | `MAIL_FROM` | 보낸 사람 | 예: `ERPilot <no-reply@도메인>` |
@@ -271,7 +278,7 @@ npm test
 | 8 | [API 설계](docs/08-api-design.md) | NestJS 모듈 구조, Endpoint, Swagger |
 | 9 | [AI 챗봇 설계](docs/09-ai-chatbot-design.md) | Function Calling, RBAC 강제, 프롬프트 전략 (목표 설계) |
 | 10 | [RAG 설계](docs/10-rag-design.md) | 업로드~답변생성 전체 파이프라인 (목표 설계) |
-| 11 | [pgvector 설계](docs/11-pgvector-design.md) | 테이블/인덱스/유사도 검색 SQL (목표 설계, 스키마만 반영) |
+| 11 | [pgvector 설계](docs/11-pgvector-design.md) | 테이블/인덱스/유사도 검색 SQL (목표 설계, 청크 저장·코사인 검색은 구현, 인덱스는 미적용) |
 | 12 | [JWT 인증 설계](docs/12-jwt-auth-design.md) | Access/Refresh Token, Guard, 보안 |
 | 13 | [시스템 아키텍처](docs/13-system-architecture.md) | 목표 아키텍처 구조도 및 요청 흐름 |
 | 14 | [배포 아키텍처](docs/14-deployment-architecture.md) | 목표 배포안(AWS 기준) — 실제 배포는 Railway |

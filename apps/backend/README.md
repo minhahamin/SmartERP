@@ -51,9 +51,10 @@ src/
 
 ## 이번 작업 범위에서 의도적으로 비워둔 부분
 
-- **RAG 색인 / AI Function Calling 실제 구현**: `rag.service.ts`, `ai-chat.service.ts`는 데이터 永속화와
-  엔드포인트 골격만 갖추고 있고, 실제 Chunking/Embedding/유사도 검색/GPT Function Calling 오케스트레이션은
-  [docs/09](../../docs/09-ai-chatbot-design.md)~[docs/11](../../docs/11-pgvector-design.md) 구현이 필요하다.
+- **RAG 고도화**: 청크 분할·Gemini 임베딩·pgvector 코사인 검색(`rag.service.ts`, `rag/chunker.ts`)과 Gemini
+  Function Calling 오케스트레이션(`ai-chat.service.ts`)은 구현돼 있다. 비워둔 것은 HNSW/IVFFlat 인덱스,
+  비동기 색인 큐, 재순위(rerank)다([docs/10](../../docs/10-rag-design.md)~[docs/11](../../docs/11-pgvector-design.md)).
+  기존 문서 재색인은 `npm run rag:reindex`.
 - **문서 원본 저장**: docs/13은 S3 Presigned URL을 전제하지만, 이번 작업에서는 로컬 `uploads/` 디렉터리에
   저장한다(AWS 자격 증명 없이도 기능 검증 가능하도록).
 - **계정 잠금(5회 실패 시 5분 잠금)**: `/auth/login`의 분당 5회 Rate Limit(docs/12.6)은 구현했지만,
