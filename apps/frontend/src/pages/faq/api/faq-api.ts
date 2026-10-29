@@ -26,6 +26,8 @@ export interface GenerateFaqResult {
   analyzedMessages: number;
   distinctQuestions: number;
   candidatesCreated: number;
+  /** 근거(문서·화면 안내)를 찾지 못해 답변을 쓰지 않고 건너뛴 후보 수 */
+  skippedNoEvidence: number;
   candidates: { id: string; question: string }[];
 }
 
