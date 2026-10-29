@@ -26,10 +26,41 @@ export const SCREEN_GUIDE = [
   '문서 관리: 사내 문서를 올리고 검색한다. 공지사항: 공지를 확인한다. 통계 분석: 매출·재고·인사 차트를 본다.',
 ];
 
+/**
+ * 답변이 근거로 인정받으려면 문서 제목이나 아래의 구체적인 화면 이름 중 하나를 담아야 한다.
+ * "AI 어시스턴트에게 문의하세요" 같은 어디에나 붙일 수 있는 문구는 일부러 뺐다 — 그것만으로는 FAQ 답변이 되지 않는다.
+ */
+export const SCREEN_NAMES = [
+  '재고 관리',
+  '발주 관리',
+  '생산 관리',
+  '직원 관리',
+  '급여 관리',
+  '일정 관리',
+  '부서 관리',
+  '거래처 관리',
+  '영업 관리',
+  '제품 관리',
+  '입출고 관리',
+  '문서 관리',
+  '공지사항',
+  '통계 분석',
+];
+
+/** 질문의 성격. 현재 데이터를 조회하는 질문(DATA_LOOKUP)은 챗봇이 도구로 실시간 답하므로 FAQ로 만들지 않는다 */
+export type FaqQuestionKind = 'KNOWLEDGE' | 'DATA_LOOKUP';
+
 export interface FaqCluster {
   representativeQuestion: string;
   category: string;
   matchedCount: number;
+  /** 모델이 판단한 질문 성격. 없으면 KNOWLEDGE로 본다 */
+  kind?: FaqQuestionKind;
+}
+
+/** 답변이 근거 문서의 제목이나 구체적인 화면 이름을 담고 있는지 */
+export function hasEvidence(answer: string, documents: { title: string }[]): boolean {
+  return documents.some((d) => answer.includes(d.title)) || SCREEN_NAMES.some((name) => answer.includes(name));
 }
 
 export interface FaqEvidenceDocument {
@@ -52,10 +83,12 @@ export function buildClusterPrompt(
     '아래는 사내 ERP 챗봇에 실제로 들어온 사용자 질문과, 완전히 동일한 문장이 반복된 횟수입니다.',
     '표현은 다르지만 실질적으로 같은 의도를 묻는 질문들을 하나의 그룹으로 묶고,',
     `그룹에 속한 질문들의 횟수 합이 ${threshold} 이상인 그룹만 골라주세요.`,
-    '각 그룹마다 대표 질문 하나(representativeQuestion), 분류(category, 예: 인사/휴가/급여/재고/영업/생산/기타), 그룹의 총 횟수 합(matchedCount)을 만들어주세요.',
+    '각 그룹마다 대표 질문 하나(representativeQuestion), 분류(category, 예: 인사/휴가/급여/재고/영업/생산/기타), 그룹의 총 횟수 합(matchedCount), 질문 성격(kind)을 만들어주세요.',
+    'kind는 두 값 중 하나입니다. DATA_LOOKUP: "내 근태 현황", "재고가 부족한 품목은?", "이번 달 매출"처럼 지금의 실제 데이터를 조회하는 질문(답이 매번 달라진다).',
+    'KNOWLEDGE: 규정·절차·방법처럼 답이 문서나 화면 사용법으로 정해져 있는 질문.',
     '답변은 쓰지 않습니다.',
     `기준(${threshold}회 이상)을 만족하는 그룹이 없으면 빈 배열을 반환하세요.`,
-    '정확히 이 JSON 스키마의 배열로만 응답하세요: [{ "representativeQuestion": string, "category": string, "matchedCount": number }]',
+    '정확히 이 JSON 스키마의 배열로만 응답하세요: [{ "representativeQuestion": string, "category": string, "matchedCount": number, "kind": "KNOWLEDGE" | "DATA_LOOKUP" }]',
     '',
     '질문 목록(질문 | 횟수):',
     ...questions.map((q) => `- ${q.sample} | ${q.count}`),
@@ -82,7 +115,7 @@ export function buildAnswerPrompt(requests: FaqAnswerRequest[]): string {
     '1. 답변은 "참고 문서"의 본문 또는 "화면 안내"에 실제로 적힌 내용만 근거로 쓴다. 근거에 없는 숫자·기간·절차·이름을 만들지 않는다.',
     '2. 문서 내용을 쓸 때는 문서 제목을 한 번 언급한다. 문서가 질문이 묻는 바에 직접 답하지 않으면(주제만 비슷한 경우 포함) 그 문서는 무시한다.',
     '   예: "내 근태 현황 알려줘", "재고가 부족한 품목은?"처럼 지금의 데이터를 조회하는 질문은 규정·매뉴얼 내용을 설명하지 말고, AI 어시스턴트에 물어보거나 해당 화면에서 확인할 수 있다고 안내한다.',
-    '3. "담당자에게 문의하세요", "관련 메뉴에서 확인하세요"처럼 내용이 없는 안내만으로는 답변을 만들지 않는다. 구체적인 화면 이름과 그 화면에서 할 수 있는 일을 함께 쓸 수 있을 때만 화면 안내로 답한다.',
+    '3. "담당자에게 문의하세요", "AI 어시스턴트에게 물어보세요"처럼 내용이 없는 안내만으로는 답변을 만들지 않는다. 구체적인 화면 이름(예: 재고 관리)과 그 화면에서 할 수 있는 일을 함께 쓸 수 있을 때만 화면 안내로 답한다. 답변에는 근거 문서의 제목이나 화면 이름이 반드시 들어가야 한다.',
     '4. 근거가 부족하면 answer를 null로 둔다(사람이 직접 쓰도록 후보에서 제외된다).',
     '',
     '[화면 안내]',

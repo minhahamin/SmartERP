@@ -31,6 +31,7 @@ import {
   FAQ_MAX_CANDIDATES,
   buildAnswerPrompt,
   buildClusterPrompt,
+  hasEvidence,
   parseAnswers,
   parseClusters,
   type FaqAnswerRequest,
@@ -252,7 +253,7 @@ export class AiChatService {
       take: FAQ_ANALYSIS_LIMIT,
     });
     if (messages.length === 0) {
-      return { analyzedMessages: 0, distinctQuestions: 0, candidatesCreated: 0, skippedNoEvidence: 0, candidates: [] };
+      return { analyzedMessages: 0, distinctQuestions: 0, candidatesCreated: 0, skippedNoEvidence: 0, skippedDataLookup: 0, candidates: [] };
     }
 
     const countByNormalized = new Map<string, { sample: string; count: number }>();
@@ -277,10 +278,12 @@ export class AiChatService {
     const existingQuestions = new Set(existing.map((f) => f.question.trim().toLowerCase()));
 
     // 모델이 만든 matchedCount를 그대로 신뢰하지 않고 임계치를 서버에서 다시 확인한다(2차 방어).
-    const targets = clusters
+    const eligible = clusters
       .filter((c) => c.representativeQuestion.trim() && c.matchedCount >= threshold)
-      .filter((c) => !existingQuestions.has(c.representativeQuestion.trim().toLowerCase()))
-      .slice(0, FAQ_MAX_CANDIDATES);
+      .filter((c) => !existingQuestions.has(c.representativeQuestion.trim().toLowerCase()));
+    // 현재 데이터를 조회하는 질문은 답이 매번 달라 FAQ로 굳힐 수 없다 — 챗봇이 도구로 실시간 답한다
+    const skippedDataLookup = eligible.filter((c) => c.kind === 'DATA_LOOKUP').length;
+    const targets = eligible.filter((c) => c.kind !== 'DATA_LOOKUP').slice(0, FAQ_MAX_CANDIDATES);
     const answers = await this.writeGroundedAnswers(companyId, targets);
 
     const created: { id: string; question: string }[] = [];
@@ -314,6 +317,8 @@ export class AiChatService {
       candidatesCreated: created.length,
       /** 근거(문서·화면 안내)를 찾지 못해 답변을 쓰지 않고 건너뛴 후보 수 — 사람이 직접 작성해야 한다 */
       skippedNoEvidence,
+      /** 현재 데이터를 조회하는 질문이라 FAQ 대상에서 제외한 수 */
+      skippedDataLookup,
       candidates: created,
     };
   }
@@ -348,7 +353,13 @@ export class AiChatService {
 
     const response = await this.callFaqModel('FAQ 답변 작성', buildAnswerPrompt(requests));
     try {
-      return parseAnswers(response.text);
+      // 모델이 규칙을 어기고 내용 없는 답을 써도(문서·화면 이름이 없는 답) 서버에서 한 번 더 걸러낸다
+      const answers = parseAnswers(response.text);
+      for (const request of requests) {
+        const answer = answers.get(request.id);
+        if (answer && !hasEvidence(answer, request.documents)) answers.delete(request.id);
+      }
+      return answers;
     } catch (error) {
       this.logger.error('FAQ 답변 응답 파싱 실패', error instanceof Error ? error.stack : String(error));
       throw new BadRequestException('FAQ 후보 생성 응답을 해석하지 못했습니다. 다시 시도해주세요.');

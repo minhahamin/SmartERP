@@ -1,5 +1,6 @@
 import {
   FAQ_MAX_CANDIDATES,
+  hasEvidence,
   buildAnswerPrompt,
   buildClusterPrompt,
   parseAnswers,
@@ -107,5 +108,47 @@ describe('AiChatService.generateFaqCandidatesForCompany — 근거 기반 답변
     const { service, rag } = build([JSON.stringify(many), JSON.stringify([])]);
     await service.generateFaqCandidatesForCompany('c1', 5);
     expect(rag.search).toHaveBeenCalledTimes(FAQ_MAX_CANDIDATES);
+  });
+
+  it('데이터 조회형 질문은 후보에서 제외하고 문서 검색·답변 작성 대상에도 넣지 않는다', async () => {
+    const { service, rag, generateContent } = build([
+      JSON.stringify([
+        { representativeQuestion: '내 근태 현황 알려줘', category: '인사', matchedCount: 6, kind: 'DATA_LOOKUP' },
+        { representativeQuestion: '재고가 부족한 품목은?', category: '재고', matchedCount: 5, kind: 'DATA_LOOKUP' },
+      ]),
+    ]);
+    const result = await service.generateFaqCandidatesForCompany('c1', 5);
+    expect(result).toMatchObject({ candidatesCreated: 0, skippedDataLookup: 2 });
+    expect(rag.search).not.toHaveBeenCalled();
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('모델이 규칙을 어기고 문서·화면 이름 없는 빈 답을 써도 서버가 걸러낸다', async () => {
+    const { service, prisma } = build([
+      JSON.stringify([
+        { representativeQuestion: '병가는 며칠까지 쓸 수 있어?', category: '인사', matchedCount: 6, kind: 'KNOWLEDGE' },
+        { representativeQuestion: '주차 등록은 어떻게 해?', category: '기타', matchedCount: 5, kind: 'KNOWLEDGE' },
+        { representativeQuestion: '발주서는 어디서 확정해?', category: '재고', matchedCount: 5, kind: 'KNOWLEDGE' },
+      ]),
+      JSON.stringify([
+        { id: '0', answer: '연차 및 휴가 운영 지침에 따르면 병가는 연 30일 이내입니다.' },
+        { id: '1', answer: '이 질문은 AI 어시스턴트에게 문의하거나 해당 화면에서 확인하실 수 있습니다.' },
+        { id: '2', answer: '발주 관리 화면에서 초안의 공급처와 수량을 확인한 뒤 확정할 수 있습니다.' },
+      ]),
+    ]);
+    const result = await service.generateFaqCandidatesForCompany('c1', 5);
+    expect(result).toMatchObject({ candidatesCreated: 2, skippedNoEvidence: 1 });
+    const questions = prisma.faqItem.create.mock.calls.map((c) => c[0].data.question);
+    expect(questions).toEqual(['병가는 며칠까지 쓸 수 있어?', '발주서는 어디서 확정해?']);
+  });
+});
+
+describe('hasEvidence', () => {
+  it('문서 제목이나 구체적인 화면 이름이 있어야 근거로 인정한다', () => {
+    const docs = [{ title: '연차 및 휴가 운영 지침' }];
+    expect(hasEvidence('연차 및 휴가 운영 지침에 따르면 15일입니다.', docs)).toBe(true);
+    expect(hasEvidence('재고 관리 화면에서 확인합니다.', [])).toBe(true);
+    expect(hasEvidence('AI 어시스턴트에게 문의하세요.', docs)).toBe(false);
+    expect(hasEvidence('담당자에게 문의하시기 바랍니다.', [])).toBe(false);
   });
 });
