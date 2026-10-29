@@ -19,6 +19,7 @@ export const ROUTES = {
   products: '/products',
   inventory: '/inventory',
   stockMovements: '/stock-movements',
+  purchaseOrders: '/purchase-orders',
   production: '/production',
   documents: '/documents',
   announcements: '/announcements',

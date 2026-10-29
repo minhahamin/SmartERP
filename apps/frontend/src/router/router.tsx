@@ -21,6 +21,7 @@ import { ProductsPage } from '@/pages/products/products-page';
 import { ProductDetailPage } from '@/pages/products/product-detail-page';
 import { InventoryPage } from '@/pages/inventory/inventory-page';
 import { StockMovementsPage } from '@/pages/stock-movements/stock-movements-page';
+import { PurchaseOrdersPage } from '@/pages/purchase-orders/purchase-orders-page';
 import { ProductionPage } from '@/pages/production/production-page';
 import { DocumentsPage } from '@/pages/documents/documents-page';
 import { AnnouncementsPage } from '@/pages/announcements/announcements-page';
@@ -148,6 +149,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission resource="STOCK_MOVEMENT">
             <StockMovementsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: ROUTES.purchaseOrders,
+        element: (
+          <RequirePermission resource="INVENTORY">
+            <PurchaseOrdersPage />
           </RequirePermission>
         ),
       },

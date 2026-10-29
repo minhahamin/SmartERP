@@ -16,6 +16,7 @@ import {
   Megaphone,
   BarChart3,
   MessagesSquare,
+  ClipboardList,
 } from 'lucide-react';
 import { ROUTES } from '@/config/routes';
 import type { NavSection } from '@/types/nav';
@@ -52,6 +53,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: '제품 관리', path: ROUTES.products, icon: Package, resource: 'PRODUCT' },
       { label: '재고 관리', path: ROUTES.inventory, icon: Warehouse, resource: 'INVENTORY' },
       { label: '입출고 관리', path: ROUTES.stockMovements, icon: ArrowLeftRight, resource: 'STOCK_MOVEMENT' },
+      { label: '발주 관리', path: ROUTES.purchaseOrders, icon: ClipboardList, resource: 'INVENTORY' },
       { label: '생산 관리', path: ROUTES.production, icon: Factory, resource: 'PRODUCTION' },
     ],
   },
