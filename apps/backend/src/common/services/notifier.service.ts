@@ -35,4 +35,33 @@ export class NotifierService {
       input,
     );
   }
+
+  /**
+   * 특정 권한(예: LEAVE:APPROVE)을 가진 역할의 재직 사용자에게 보낸다. 역할 이름을 하드코딩하지 않으므로
+   * 회사가 권한 매트릭스를 바꿔도 알림 대상이 따라간다. excludeUserId는 본인에게 보내지 않기 위한 값이다.
+   */
+  async notifyByPermission(
+    companyId: string,
+    permission: { resource: string; action: string },
+    input: NotificationInput,
+    excludeUserId?: string,
+  ): Promise<number> {
+    const users = await this.prisma.user.findMany({
+      where: {
+        companyId,
+        status: 'ACTIVE',
+        ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+        role: {
+          rolePermissions: {
+            some: { permission: { resource: permission.resource, action: permission.action as never } },
+          },
+        },
+      },
+      select: { id: true },
+    });
+    return this.notifyUsers(
+      users.map((u) => u.id),
+      input,
+    );
+  }
 }

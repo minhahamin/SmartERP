@@ -1,7 +1,8 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, type LeaveRequest, type LeaveType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PolicyService } from '../../common/services/policy.service';
+import { NotifierService } from '../../common/services/notifier.service';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
@@ -58,9 +59,12 @@ function resolveScheduleWindow(request: {
 
 @Injectable()
 export class LeaveService {
+  private readonly logger = new Logger(LeaveService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly policy: PolicyService,
+    private readonly notifier: NotifierService,
   ) {}
 
   async findAll(query: LeaveQueryDto, requester: AuthUser) {
@@ -98,7 +102,53 @@ export class LeaveService {
     });
   }
 
+  /**
+   * 신청이 대기(PENDING)로 들어오면 결재 권한자에게 알리고, 승인·반려되면 신청자에게 알린다.
+   * 알림은 부가 기능이라 실패해도 휴가 처리 결과를 바꾸지 않는다.
+   */
   async create(dto: CreateLeaveRequestDto, requester: AuthUser) {
+    const request = await this.createRequest(dto, requester);
+    if (request.status === 'PENDING') {
+      await this.safely(() =>
+        this.notifier.notifyByPermission(
+          requester.companyId,
+          { resource: 'LEAVE', action: 'APPROVE' },
+          {
+            type: 'LEAVE_REQUESTED',
+            title: '휴가 신청이 결재를 기다립니다',
+            message: `${LEAVE_TYPE_LABEL[request.type]} ${dto.startDate}${dto.startDate === dto.endDate ? '' : ` ~ ${dto.endDate}`}`,
+            link: '/employees',
+            dedupeKey: `leave-requested:${request.id}`,
+          },
+          requester.sub,
+        ),
+      );
+    }
+    return request;
+  }
+
+  private async notifyDecision(request: Pick<LeaveRequest, 'id' | 'userId' | 'type' | 'startDate'>, approved: boolean, requester: AuthUser) {
+    if (request.userId === requester.sub) return;
+    await this.safely(() =>
+      this.notifier.notifyUsers([request.userId], {
+        type: approved ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED',
+        title: approved ? '휴가 신청이 승인되었습니다' : '휴가 신청이 반려되었습니다',
+        message: `${LEAVE_TYPE_LABEL[request.type]} ${request.startDate.toISOString().slice(0, 10)} 시작`,
+        link: '/employees',
+        dedupeKey: `leave-decision:${request.id}`,
+      }),
+    );
+  }
+
+  private async safely(job: () => Promise<unknown>) {
+    try {
+      await job();
+    } catch (error) {
+      this.logger.warn(`휴가 알림 실패: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  private async createRequest(dto: CreateLeaveRequestDto, requester: AuthUser) {
     const fixedDays = FIXED_FRACTION_DAYS[dto.type];
     let days: number;
     let startTime: string | undefined;
@@ -206,7 +256,7 @@ export class LeaveService {
     // PENDING 중복 신청이 여러 건이어도 승인 시점에 합산 잔액을 검사하므로 overdraw 불가하고,
     // 동시 승인 경합도 직렬화되어 한 건만 통과한다. 전이-반영이 분리되면 "승인됐는데 캘린더 누락"
     // 반쪽 성공이 생기므로 반드시 같은 트랜잭션에서 처리한다.
-    return this.prisma.$transaction(
+    const approved = await this.prisma.$transaction(
       async (tx) => {
         const request = await tx.leaveRequest.findUnique({
           where: { id },
@@ -234,6 +284,8 @@ export class LeaveService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+    await this.notifyDecision(approved, true, requester);
+    return approved;
   }
 
   reject(id: string, requester: AuthUser) {
@@ -281,7 +333,9 @@ export class LeaveService {
       throw new NotFoundException('휴가 신청을 찾을 수 없습니다.');
     if (request.status !== 'PENDING') throw new BadRequestException('이미 처리된 신청입니다.');
 
-    return this.prisma.leaveRequest.update({ where: { id }, data: { status, approverId: requester.sub } });
+    const updated = await this.prisma.leaveRequest.update({ where: { id }, data: { status, approverId: requester.sub } });
+    await this.notifyDecision(updated, status === 'APPROVED', requester);
+    return updated;
   }
 
   private async createLeaveSchedule(
