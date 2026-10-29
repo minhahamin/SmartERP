@@ -88,6 +88,20 @@ describe('AiToolsService — 도구 후보 좁히기', () => {
     expect(exposed).not.toContain('getProductionOrdersByStatus');
   });
 
+  it('규정 키워드가 없어도 다른 도구가 매칭되면 문서 검색 도구를 함께 후보에 둔다', async () => {
+    const { service } = build(['DOCUMENT', 'ANNOUNCEMENT']);
+    const exposed = names(await service.getDeclarations(authUser(), '병가는 며칠까지 쓸 수 있어?'));
+    expect(exposed).toContain('draftLeaveRequest');
+    expect(exposed).toContain('searchInternalDocuments');
+    expect(exposed).not.toContain('getAnnouncements');
+  });
+
+  it('문서 READ 권한이 없으면 문서 검색 도구를 덧붙이지 않는다', async () => {
+    const { service } = build(['ANNOUNCEMENT']);
+    const exposed = names(await service.getDeclarations(authUser(), '병가는 며칠까지 쓸 수 있어?'));
+    expect(exposed).not.toContain('searchInternalDocuments');
+  });
+
   it('공지를 쓰겠다고 말하면 공지 초안 도구가 후보에 오른다', async () => {
     const { service } = build(['ANNOUNCEMENT'], true);
     expect(names(await service.getDeclarations(authUser(), '전체 공지 작성해줘'))).toContain(

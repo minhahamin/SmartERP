@@ -48,6 +48,7 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+const DOCUMENT_SEARCH_TOOL = 'searchInternalDocuments';
 const VALID_LEAVE_TYPES = Object.keys(LEAVE_TYPE_LABEL) as LeaveType[];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -231,9 +232,9 @@ export class AiToolsService {
         '재택',
       ],
       declaration: {
-        name: 'searchInternalDocuments',
+        name: DOCUMENT_SEARCH_TOOL,
         description:
-          '사내 문서(정책/계약/보고서/매뉴얼/인사 등)를 제목·요약 키워드로 검색한다. 규정/절차/가이드성 질문에 사용한다.',
+          '사내 문서(정책/계약/보고서/매뉴얼/인사 등)의 본문을 의미 기반으로 검색한다. 규정/절차/가이드/계약 내용처럼 문서에 적힌 내용을 묻는 질문에 사용한다.',
         parametersJsonSchema: {
           type: 'object',
           properties: { query: { type: 'string', description: '검색어(예: 연차, 취업규칙, 보안정책)' } },
@@ -348,8 +349,14 @@ export class AiToolsService {
       if (ok) allowed.push(t);
     }
 
+    // 문서 검색은 키워드로 거르지 않고 권한이 있으면 항상 후보에 둔다 — "병가는 며칠까지?"처럼 규정 키워드 없이
+    // 문서에 답이 있는 질문이 많아서, 키워드 라우팅이 문서 검색을 가려 버리면 문서 근거 답변이 불가능해진다
     const matched = allowed.filter((t) => t.keywords.some((k) => userMessage.includes(k)));
-    return (matched.length > 0 ? matched : allowed).map((t) => t.declaration);
+    if (matched.length === 0) return allowed.map((t) => t.declaration);
+
+    const documentSearch = allowed.find((t) => t.declaration.name === DOCUMENT_SEARCH_TOOL);
+    const candidates = documentSearch && !matched.includes(documentSearch) ? [...matched, documentSearch] : matched;
+    return candidates.map((t) => t.declaration);
   }
 
   async execute(
