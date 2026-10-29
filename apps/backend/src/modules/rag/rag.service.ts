@@ -9,6 +9,7 @@ import { GoogleGenAI } from '@google/genai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { retryTransient } from '../../common/utils/retry-transient';
 import { chunkText } from './chunker';
+import { classifyDocument } from './document-classifier';
 
 /** document_chunks.embedding 컬럼이 vector(1536)이라 임베딩 출력 차원을 여기에 맞춘다 */
 const EMBEDDING_DIMENSIONS = 1536;
@@ -66,6 +67,7 @@ export class RagService {
       }
 
       const text = await this.extractText(document.fileUrl);
+      await this.autoClassify(document.id, document.category, document.title, text);
       const summary = text.trim()
         ? await this.summarize(text, document.title)
         : '문서에서 추출 가능한 텍스트가 없습니다.';
@@ -83,6 +85,23 @@ export class RagService {
         error instanceof Error ? error.stack : String(error),
       );
       await this.prisma.document.update({ where: { id: documentId }, data: { indexStatus: 'FAILED' } });
+    }
+  }
+
+  /**
+   * 업로더가 분류를 정하지 않아 기타(ETC)로 둔 문서만 자동 분류한다. 사람이 고른 분류는 절대 덮어쓰지 않는다.
+   * 분류 실패가 색인 전체를 막지 않도록 오류는 삼킨다.
+   */
+  private async autoClassify(documentId: string, current: string, title: string, text: string): Promise<void> {
+    if (current !== 'ETC') return;
+    try {
+      const { category } = classifyDocument(title, text);
+      if (category !== 'ETC') {
+        await this.prisma.document.update({ where: { id: documentId }, data: { category } });
+        this.logger.log(`문서 자동 분류 documentId=${documentId} → ${category}`);
+      }
+    } catch (error) {
+      this.logger.warn(`문서 자동 분류 실패 documentId=${documentId}: ${error instanceof Error ? error.message : error}`);
     }
   }
 
