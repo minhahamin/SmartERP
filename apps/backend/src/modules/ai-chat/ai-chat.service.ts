@@ -220,13 +220,22 @@ export class AiChatService {
    * 서버가 맡는다(모델 출력을 그대로 신뢰하지 않는다는 이 프로젝트의 일관된 원칙, ai-tools.service.ts 참고).
    * 실행은 사람이 관리 화면/API로 트리거하는 온디맨드 방식이다(별도 큐/스케줄러 인프라가 없음).
    */
-  async generateFaqCandidates(requester: AuthUser, threshold = 5) {
+  generateFaqCandidates(requester: AuthUser, threshold = 5) {
+    return this.generateFaqCandidatesForCompany(requester.companyId, threshold);
+  }
+
+  /** 스케줄러가 회사 단위로 부르려고 요청자 없이도 실행할 수 있게 분리했다 */
+  get isAiEnabled(): boolean {
+    return this.gemini !== null;
+  }
+
+  async generateFaqCandidatesForCompany(companyId: string, threshold = 5) {
     if (!this.gemini) {
       throw new BadRequestException('GEMINI_API_KEY가 설정되지 않아 FAQ 자동 생성을 사용할 수 없습니다.');
     }
 
     const messages = await this.prisma.chatMessage.findMany({
-      where: { role: 'USER', session: { user: { companyId: requester.companyId } } },
+      where: { role: 'USER', session: { user: { companyId } } },
       select: { content: true },
       orderBy: { createdAt: 'desc' },
       take: FAQ_ANALYSIS_LIMIT,
@@ -301,7 +310,7 @@ export class AiChatService {
     }
 
     const existing = await this.prisma.faqItem.findMany({
-      where: { companyId: requester.companyId },
+      where: { companyId },
       select: { question: true },
     });
     const existingQuestions = new Set(existing.map((f) => f.question.trim().toLowerCase()));
@@ -315,7 +324,7 @@ export class AiChatService {
 
       const item = await this.prisma.faqItem.create({
         data: {
-          companyId: requester.companyId,
+          companyId,
           question: cluster.representativeQuestion.trim(),
           answer: cluster.answer.trim(),
           category: cluster.category || undefined,

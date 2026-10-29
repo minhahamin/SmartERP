@@ -14,5 +14,6 @@ import { AiToolsService } from './ai-tools.service';
   imports: [LeaveModule, AnnouncementsModule, ProductionModule, RagModule, ScheduleModule, StatisticsModule],
   controllers: [AiChatController],
   providers: [AiChatService, AiToolsService, AiMemoryService],
+  exports: [AiChatService],
 })
 export class AiChatModule {}
