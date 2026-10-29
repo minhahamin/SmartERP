@@ -23,6 +23,8 @@ import { SalesOrdersModule } from './modules/sales-orders/sales-orders.module';
 import { ProductsModule } from './modules/products/products.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { AutomationModule } from './modules/automation/automation.module';
 import { ProductionModule } from './modules/production/production.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
@@ -55,6 +57,8 @@ import { validateEnv } from './config/env.validation';
     ProductsModule,
     InventoryModule,
     StockMovementsModule,
+    PurchaseOrdersModule,
+    AutomationModule,
     ProductionModule,
     DocumentsModule,
     AnnouncementsModule,

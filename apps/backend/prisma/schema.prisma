@@ -27,19 +27,20 @@ model Company {
   createdAt DateTime @default(now())
 
   departments      Department[]
-  users             User[]
-  roles             Role[]
-  partners          Partner[]
-  products          Product[]
-  warehouses        Warehouse[]
-  productionOrders  ProductionOrder[]
-  salesOrders       SalesOrder[]
-  documents         Document[]
-  documentFolders   DocumentFolder[]
-  announcements     Announcement[]
-  schedules         Schedule[]
-  faqItems          FaqItem[]
-  auditLogs         AuditLog[]
+  users            User[]
+  roles            Role[]
+  partners         Partner[]
+  products         Product[]
+  warehouses       Warehouse[]
+  productionOrders ProductionOrder[]
+  purchaseOrders   PurchaseOrder[]
+  salesOrders      SalesOrder[]
+  documents        Document[]
+  documentFolders  DocumentFolder[]
+  announcements    Announcement[]
+  schedules        Schedule[]
+  faqItems         FaqItem[]
+  auditLogs        AuditLog[]
 
   @@map("companies")
 }
@@ -83,7 +84,7 @@ model Role {
 }
 
 model Permission {
-  id       String            @id @default(uuid())
+  id       String           @id @default(uuid())
   resource String
   action   PermissionAction
 
@@ -114,34 +115,34 @@ model RolePermission {
 }
 
 model User {
-  id               String     @id @default(uuid())
-  companyId        String
-  employeeNo       String
-  email            String
-  passwordHash     String
-  name             String
-  phone            String?
-  departmentId     String?
-  roleId           String
-  position         String?
-  hireDate         DateTime?
+  id                       String     @id @default(uuid())
+  companyId                String
+  employeeNo               String
+  email                    String
+  passwordHash             String
+  name                     String
+  phone                    String?
+  departmentId             String?
+  roleId                   String
+  position                 String?
+  hireDate                 DateTime?
   // docs/07은 별도 급여 계약 테이블을 정의하지 않으므로, "/payrolls/generate"가 기준으로 삼을
   // 기본급을 직원 레코드에 직접 둔다(향후 직급/호봉 테이블로 분리 가능한 자리).
-  baseSalary       Decimal?   @db.Decimal(12, 0)
-  status           UserStatus @default(ACTIVE)
+  baseSalary               Decimal?   @db.Decimal(12, 0)
+  status                   UserStatus @default(ACTIVE)
   // docs/02 2.4 — 초대 가입자는 임시 비밀번호로 로그인 후 최초 1회 비밀번호 변경을 강제한다
-  mustChangePassword Boolean  @default(false)
-  refreshTokenHash String?
+  mustChangePassword       Boolean    @default(false)
+  refreshTokenHash         String?
   // docs/07은 명시하지 않지만 docs/12.3의 회전(Rotation)/재사용 탐지/만료를 서버에서
   // 강제하려면 opaque random 토큰 자체에는 정보가 없으므로 아래 두 컬럼이 필요하다.
   previousRefreshTokenHash String? // 직전(회전으로 폐기된) 토큰 해시 — 재사용 탐지용
   refreshTokenExpiresAt    DateTime?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
 
-  company           Company            @relation(fields: [companyId], references: [id])
-  department        Department?        @relation(fields: [departmentId], references: [id])
-  role              Role               @relation(fields: [roleId], references: [id])
+  company           Company             @relation(fields: [companyId], references: [id])
+  department        Department?         @relation(fields: [departmentId], references: [id])
+  role              Role                @relation(fields: [roleId], references: [id])
   attendances       Attendance[]
   leaveRequests     LeaveRequest[]
   leaveBalances     LeaveBalance[]
@@ -233,12 +234,12 @@ enum LeaveStatus {
 }
 
 model LeaveBalance {
-  id             String  @id @default(uuid())
-  userId         String
-  year           Int
-  totalDays      Decimal @db.Decimal(4, 1)
-  usedDays       Decimal @db.Decimal(4, 1)
-  remainingDays  Decimal @db.Decimal(4, 1)
+  id            String  @id @default(uuid())
+  userId        String
+  year          Int
+  totalDays     Decimal @db.Decimal(4, 1)
+  usedDays      Decimal @db.Decimal(4, 1)
+  remainingDays Decimal @db.Decimal(4, 1)
 
   user User @relation(fields: [userId], references: [id])
 
@@ -328,7 +329,7 @@ enum AttendeeStatus {
 
 // ── Sales / Partner ───────────────────────────────────────
 model Partner {
-  id        String      @id @default(uuid())
+  id        String       @id @default(uuid())
   companyId String
   name      String
   bizRegNo  String
@@ -340,8 +341,10 @@ model Partner {
   grade     PartnerGrade @default(B)
   managerId String?
 
-  company     Company       @relation(fields: [companyId], references: [id])
-  salesOrders SalesOrder[]
+  company          Company         @relation(fields: [companyId], references: [id])
+  salesOrders      SalesOrder[]
+  purchaseOrders   PurchaseOrder[]
+  suppliedProducts Product[]       @relation("ProductSupplier")
 
   @@unique([companyId, bizRegNo])
   @@map("partners")
@@ -415,8 +418,12 @@ model Product {
   safetyStock Int     @default(0)
   isActive    Boolean @default(true)
   imageUrl    String?
+  /// 발주 초안을 만들 때 기본으로 쓰는 공급처(VENDOR/BOTH 거래처). 비어 있으면 초안에서 사람이 고른다
+  supplierId  String?
 
-  company          Company           @relation(fields: [companyId], references: [id])
+  company          Company             @relation(fields: [companyId], references: [id])
+  supplier         Partner?            @relation("ProductSupplier", fields: [supplierId], references: [id])
+  purchaseItems    PurchaseOrderItem[]
   inventories      Inventory[]
   stockMovements   StockMovement[]
   productionOrders ProductionOrder[]
@@ -524,6 +531,54 @@ enum ProductionStatus {
   CANCELLED
 }
 
+/// 발주서. 안전재고 미달 시 시스템이 DRAFT로 만들고, 사람이 확인(CONFIRMED)해야 효력이 생기며
+/// 입고(RECEIVED) 때 비로소 재고가 늘어난다 — 자동화가 데이터를 직접 확정하지 않는다는 원칙.
+model PurchaseOrder {
+  id              String              @id @default(uuid())
+  companyId       String
+  orderNo         String
+  partnerId       String?
+  status          PurchaseOrderStatus @default(DRAFT)
+  isAutoGenerated Boolean             @default(false)
+  memo            String?
+  createdAt       DateTime            @default(now())
+  confirmedAt     DateTime?
+  confirmedBy     String?
+  receivedAt      DateTime?
+
+  company Company             @relation(fields: [companyId], references: [id])
+  partner Partner?            @relation(fields: [partnerId], references: [id])
+  items   PurchaseOrderItem[]
+
+  @@unique([companyId, orderNo])
+  @@index([companyId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String  @id @default(uuid())
+  purchaseOrderId String
+  productId       String
+  quantity        Int
+  unitCost        Decimal @db.Decimal(12, 0)
+  /// 초안을 만든 이유(예: "현재고 3 / 안전재고 10") — 승인자가 근거를 보고 판단하게 한다
+  reason          String?
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  CONFIRMED
+  RECEIVED
+  CANCELLED
+}
+
 // ── Knowledge / RAG ───────────────────────────────────────
 model DocumentFolder {
   id        String   @id @default(uuid())
@@ -551,7 +606,9 @@ model Document {
   version      Int              @default(1)
   status       DocumentStatus   @default(DRAFT)
   indexStatus  IndexStatus      @default(PENDING)
-  /** RagService가 PDF 텍스트를 추출해 OpenAI로 생성하는 AI 요약(docs/09 summarizeDocument) */
+  /**
+   * RagService가 PDF 텍스트를 추출해 OpenAI로 생성하는 AI 요약(docs/09 summarizeDocument)
+   */
   summary      String?          @db.Text
   isPublic     Boolean          @default(true)
   departmentId String?
@@ -647,10 +704,13 @@ model Notification {
   message   String
   link      String?
   isRead    Boolean  @default(false)
+  /// 자동 알림의 중복 방지 키(예: 'production-delay:<오더id>:2026-10-29'). 같은 사용자에게 같은 키는 한 번만 만든다
+  dedupeKey String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
+  @@unique([userId, dedupeKey])
   @@index([userId, isRead])
   @@map("notifications")
 }
@@ -663,7 +723,7 @@ model ChatSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user         User            @relation(fields: [userId], references: [id])
+  user         User                @relation(fields: [userId], references: [id])
   messages     ChatMessage[]
   actionDrafts AiActionDraft[]
   turns        ChatTurnEmbedding[]
@@ -743,12 +803,18 @@ model AiActionDraft {
   id                String         @id @default(uuid())
   userId            String
   sessionId         String
-  /** 예: 'LEAVE_REQUEST'. 새 액션 유형을 추가할 때마다 값이 늘어난다(현재는 1종) */
+  /**
+   * 예: 'LEAVE_REQUEST'. 새 액션 유형을 추가할 때마다 값이 늘어난다(현재는 1종)
+   */
   actionType        String
-  /** confirm 시 그대로 해당 도메인 서비스의 CreateDto로 캐스팅되는 원본 제안 내용 */
+  /**
+   * confirm 시 그대로 해당 도메인 서비스의 CreateDto로 캐스팅되는 원본 제안 내용
+   */
   payload           Json
   status            AiActionStatus @default(PENDING)
-  /** confirm 성공 후 실제로 생성된 레코드(예: LeaveRequest)의 id — 감사 추적용 */
+  /**
+   * confirm 성공 후 실제로 생성된 레코드(예: LeaveRequest)의 id — 감사 추적용
+   */
   resultingRecordId String?
   createdAt         DateTime       @default(now())
   confirmedAt       DateTime?
