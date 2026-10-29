@@ -4,6 +4,7 @@ import { join } from 'path';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { paginate } from '../../common/interfaces/paginated-result.interface';
+import { detectImageType } from '../../common/utils/image-type';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
 import { CreateProductDto, PRICE_FIELDS, UpdateProductDto } from './dto/product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -70,10 +71,13 @@ export class ProductsService {
     await this.findOne(id, requester);
 
     await mkdir(UPLOAD_DIR, { recursive: true });
-    // multer는 multipart 파일명을 latin1로 디코딩한다 — 브라우저가 보낸 한글 등 비ASCII 원본 파일명은
-    // 그대로 쓰면 깨지므로 utf8로 다시 해석한다.
-    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    const fileName = `${randomUUID()}-${originalName}`;
+    // Content-Type과 파일명은 클라이언트가 정하는 값이라(.html을 image/png로 위장 가능) 믿지 않고
+    // 파일 내용(매직 넘버)으로 종류를 판별한다. 파일명도 원본을 쓰지 않고 서버가 확장자까지 정한다.
+    const detected = detectImageType(file.buffer);
+    if (!detected) {
+      throw new BadRequestException('PNG, JPG, GIF, WEBP 이미지만 업로드할 수 있습니다.');
+    }
+    const fileName = `${randomUUID()}.${detected.ext}`;
     await writeFile(join(UPLOAD_DIR, fileName), file.buffer);
 
     return this.prisma.product.update({

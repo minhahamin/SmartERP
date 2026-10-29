@@ -17,6 +17,7 @@ import { memoryStorage } from 'multer';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUser } from '../../common/interfaces/auth-user.interface';
+import { ALLOWED_IMAGE_MIMES } from '../../common/utils/image-type';
 import { ProductsService } from './products.service';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -72,8 +73,9 @@ export class ProductsController {
       storage: memoryStorage(),
       limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (_req, file, callback) => {
-        if (!file.mimetype.startsWith('image/')) {
-          callback(new BadRequestException('이미지 파일만 업로드할 수 있습니다.'), false);
+        // 1차 걸러내기일 뿐 — 최종 판단은 서비스에서 파일 내용으로 한다
+        if (!ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
+          callback(new BadRequestException('PNG, JPG, GIF, WEBP 이미지만 업로드할 수 있습니다.'), false);
           return;
         }
         callback(null, true);

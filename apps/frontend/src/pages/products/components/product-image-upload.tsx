@@ -46,7 +46,7 @@ function ProductImageUpload({ value, onChange }: ProductImageUploadProps) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/png,image/jpeg,image/gif,image/webp"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
