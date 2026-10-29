@@ -3,9 +3,10 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule as CronModule } from '@nestjs/schedule';
 import { PurchaseOrdersModule } from '../purchase-orders/purchase-orders.module';
 import { AutomationScheduler } from './automation.scheduler';
+import { ProductionDelayNotifier } from './production-delay.notifier';
 
 @Module({
   imports: [CronModule.forRoot(), PurchaseOrdersModule],
-  providers: [AutomationScheduler],
+  providers: [AutomationScheduler, ProductionDelayNotifier],
 })
 export class AutomationModule {}

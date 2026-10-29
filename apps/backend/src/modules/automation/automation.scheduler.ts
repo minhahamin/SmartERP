@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
+import { ProductionDelayNotifier } from './production-delay.notifier';
 
 const KST = 'Asia/Seoul';
 
@@ -19,6 +20,7 @@ export class AutomationScheduler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly purchaseOrders: PurchaseOrdersService,
+    private readonly productionDelay: ProductionDelayNotifier,
     config: ConfigService,
   ) {
     this.enabled = config.get<string>('AUTOMATION_ENABLED') !== 'false';
@@ -30,6 +32,12 @@ export class AutomationScheduler {
     await this.forEachCompany('발주 초안 생성', (companyId) =>
       this.purchaseOrders.generateDraftsForCompany(companyId),
     );
+  }
+
+  /** 출근 시간에 납기를 넘긴 생산 오더를 담당자·관리자에게 알린다 */
+  @Cron('0 0 9 * * *', { timeZone: KST })
+  async notifyProductionDelays() {
+    await this.forEachCompany('생산 지연 알림', (companyId) => this.productionDelay.notifyForCompany(companyId));
   }
 
   private async forEachCompany(label: string, job: (companyId: string) => Promise<unknown>) {
