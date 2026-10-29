@@ -34,6 +34,8 @@ const ACTION_DRAFT_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const MAX_TOOL_TURNS = 4;
 const HISTORY_LIMIT = 10;
+const EMPTY_ANSWER_NUDGE = '위 도구 결과를 바탕으로 한국어로 답변해줘.';
+
 /** FAQ 후보 생성 1회 실행당 분석할 최근 사용자 질문 개수 상한(비용 가드) */
 const FAQ_ANALYSIS_LIMIT = 300;
 
@@ -338,6 +340,7 @@ export class AiChatService {
     let lastDraftId: string | undefined;
 
     let turn = 0;
+    let nudgedEmptyAnswer = false;
     try {
       while (turn < MAX_TOOL_TURNS) {
         const response = await retryTransient(() =>
@@ -354,6 +357,14 @@ export class AiChatService {
 
         const calls = response.functionCalls ?? [];
         if (calls.length === 0) {
+          // flash-lite 계열은 도구 결과를 받고도 간헐적으로 빈 응답(STOP)을 돌려준다. 같은 입력이어도 비거나 차서
+          // 도구 결과 내용과는 무관하므로, 한 번만 "결과를 바탕으로 답하라"는 문장을 덧붙여 다시 요청한다
+          if (!response.text?.trim() && usedTools.length > 0 && !nudgedEmptyAnswer) {
+            nudgedEmptyAnswer = true;
+            const lastContent = contents[contents.length - 1];
+            lastContent.parts = [...(lastContent.parts ?? []), { text: EMPTY_ANSWER_NUDGE }];
+            continue;
+          }
           const text = response.text?.trim() || '답변을 생성하지 못했습니다.';
           return this.prisma.chatMessage.create({
             data: {
