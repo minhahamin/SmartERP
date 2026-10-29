@@ -3,11 +3,13 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule as CronModule } from '@nestjs/schedule';
 import { PurchaseOrdersModule } from '../purchase-orders/purchase-orders.module';
 import { ReportsModule } from '../reports/reports.module';
+import { AiChatModule } from '../ai-chat/ai-chat.module';
 import { AutomationScheduler } from './automation.scheduler';
+import { AnomalyDetector } from './anomaly-detector';
 import { ProductionDelayNotifier } from './production-delay.notifier';
 
 @Module({
-  imports: [CronModule.forRoot(), PurchaseOrdersModule, ReportsModule],
-  providers: [AutomationScheduler, ProductionDelayNotifier],
+  imports: [CronModule.forRoot(), PurchaseOrdersModule, ReportsModule, AiChatModule],
+  providers: [AutomationScheduler, ProductionDelayNotifier, AnomalyDetector],
 })
 export class AutomationModule {}
